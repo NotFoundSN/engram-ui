@@ -15,6 +15,8 @@ and updates.
 | `mem_search` with exact `topic_key` | Timeline of an artifact | Returns all revisions oldest → newest |
 | `mem_current_project` | Verify cwd → project mapping | Use when multi-repo setup is uncertain |
 
+> **Note on `topic_key_prefix`**: The examples below use `topic_key_prefix` as the canonical query parameter, which engram-ui supports natively against its store. Engram's MCP `mem_search` tool today only exposes `query`, `type`, `project`, `scope`, and `limit` parameters — to achieve prefix queries via MCP, either (a) use `query` with the prefix as a keyword (FTS will match observations whose content or title mentions the prefix), or (b) request observations by exact `topic_key` for revisions, or (c) fetch a broader set and post-filter results by their `topic_key` field. The convention itself remains: stable namespaced keys enable prefix grouping wherever the consumer supports it.
+
 **Query shape**: combine `query` (keywords) + `type` + `topic_key_prefix`.
 Bare keyword search in a busy project is noisy. At minimum, add a `type` or
 `topic_key_prefix` to narrow results.
