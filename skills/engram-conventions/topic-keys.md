@@ -35,6 +35,7 @@ observations queryable, groupable, and revisable.
 | Namespace | Purpose | Documented in |
 |-----------|---------|---------------|
 | `sdd/<change>/<phase>` | SDD workflow artifacts | `workflows/sdd.md` |
+| `sdd-init/<project>` | SDD project context (test command, conventions, stack) | `workflows/sdd.md` |
 | `superpowers/<feature>/<phase>` | Superpowers skill outputs | `workflows/superpowers.md` |
 | `architecture/<area>` | Standalone architectural decisions | `workflows/ad-hoc.md` |
 | `decision/<short-id>` | Standalone tactical decisions | `workflows/ad-hoc.md` |
@@ -44,7 +45,7 @@ observations queryable, groupable, and revisable.
 | `config/<area>` | Configuration changes | `workflows/ad-hoc.md` |
 | `preference/<area>` | User preferences | `workflows/ad-hoc.md` |
 
-For multi-repo products, a repo-prefix slot is prepended. See `multi-repo.md`.
+For multi-repo products, the repo identifier is used as the leading slot. See `multi-repo.md`.
 
 ---
 
