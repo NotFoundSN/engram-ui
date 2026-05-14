@@ -1,0 +1,48 @@
+package views
+
+import (
+	"fmt"
+
+	"github.com/Gentleman-Programming/engram-ui/internal/client"
+)
+
+templ ObservationDetail(o *client.Observation) {
+	@Layout(o.Title) {
+		<a href="/" class="mb-6 inline-block text-xs text-slate-500 hover:text-slate-300">← back</a>
+		<article class="rounded-lg border border-slate-800 bg-slate-900/40 p-6">
+			<header class="mb-4 flex items-baseline justify-between gap-4">
+				<h1 class="text-xl font-semibold tracking-tight text-slate-100">{ o.Title }</h1>
+				<span class="shrink-0 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] uppercase tracking-wider text-slate-300">
+					{ o.Type }
+				</span>
+			</header>
+			<dl class="mb-6 grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
+				@metaRow("ID", fmt.Sprintf("#%d", o.ID))
+				@metaRow("Created", o.CreatedAt)
+				@metaRow("Scope", o.Scope)
+				if o.Project != nil {
+					@metaRow("Project", *o.Project)
+				}
+				if o.TopicKey != nil {
+					@metaRow("Topic key", *o.TopicKey)
+				}
+				if o.ToolName != nil {
+					@metaRow("Tool", *o.ToolName)
+				}
+				if o.RevisionCount > 0 {
+					@metaRow("Revisions", fmt.Sprintf("%d", o.RevisionCount))
+				}
+			</dl>
+			<div class="whitespace-pre-wrap break-words rounded-md bg-slate-950 p-4 text-sm text-slate-200">
+				{ o.Content }
+			</div>
+		</article>
+	}
+}
+
+templ metaRow(label, value string) {
+	<div>
+		<dt class="text-slate-500">{ label }</dt>
+		<dd class="font-mono text-slate-200">{ value }</dd>
+	</div>
+}
