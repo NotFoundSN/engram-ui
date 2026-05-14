@@ -167,7 +167,7 @@ content — search results are truncated previews.
 
 ## Multi-Repo SDD
 
-For SDD work scoped to one repo, prepend the repo identifier:
+For SDD work scoped to one repo, use the repo identifier as the leading slot:
 ```
 frontend/sdd/auth-refactor/spec
 backend/sdd/auth-refactor/spec
