@@ -79,6 +79,9 @@ optional.
 ## Goal
 [What this session was about — one sentence]
 
+## Instructions
+[User preferences or constraints discovered — skip if none]
+
 ## Discoveries
 - [Non-obvious technical findings]
 
