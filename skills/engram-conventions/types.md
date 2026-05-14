@@ -206,7 +206,7 @@ mem_save(
 
 ### `tasks`
 
-**Use when**: breaking a change into a numbered checklist of work items.
+**Use when**: breaking a change into a checkbox checklist of work items.
 The output of `sdd-tasks`.
 
 **Don't use when**: recording progress or completion status — use `report`
