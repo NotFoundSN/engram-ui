@@ -1,0 +1,162 @@
+package views
+
+import (
+	"fmt"
+	"net/url"
+
+	"github.com/Gentleman-Programming/engram-ui/internal/client"
+)
+
+type ProjectData struct {
+	Project        string
+	Observations   []client.Observation
+	AvailableTypes []string // v2: union of canonical + project-present + phantom, sorted alphabetically
+	ActiveType     string
+	Query          string
+	Sort           string // "date_desc" (default) or "date_asc"
+	SortExplicit   bool   // v2: true iff ?sort= was present in the request
+	IsSearch       bool   // true when Query != ""
+	SourceURL      string // v2: unescaped URL to embed as ?from= in observation row links
+}
+
+templ Project(d ProjectData) {
+	@Layout(d.Project) {
+		@projectHeader(d.Project)
+		<div class="mb-6 flex flex-wrap items-start gap-4">
+			@searchForm(d.Project, d.Query, d.ActiveType, d.Sort)
+			if !d.IsSearch {
+				@sortForm(d.Project, d.Query, d.ActiveType, d.Sort)
+			}
+		</div>
+		<div class="mb-4">
+			@projectTypeFilter(d.Project, d.AvailableTypes, d.ActiveType, d.Query, d.Sort, d.SortExplicit)
+		</div>
+		if len(d.Observations) == 0 {
+			@emptyProject()
+		} else {
+			@observationList(d.Observations, d.SourceURL)
+		}
+	}
+}
+
+templ projectHeader(project string) {
+	<div class="mb-6">
+		<a href="/" class="mb-3 inline-block text-xs text-slate-500 hover:text-slate-300">← all projects</a>
+		<h1 class="font-mono text-2xl font-semibold tracking-tight text-slate-100">{ project }</h1>
+	</div>
+}
+
+templ searchForm(project, q, activeType, sort string) {
+	<form method="get" action={ templ.SafeURL(fmt.Sprintf("/p/%s", project)) } class="flex items-center gap-2">
+		<label for="q" class="sr-only">Search observations</label>
+		<input
+			id="q"
+			name="q"
+			type="search"
+			value={ q }
+			placeholder="Search…"
+			aria-label="Search observations"
+			class="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
+		/>
+		if activeType != "" {
+			<input type="hidden" name="type" value={ activeType }/>
+		}
+		if sort != "" && sort != "date_desc" {
+			<input type="hidden" name="sort" value={ sort }/>
+		}
+		<button
+			type="submit"
+			class="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-300 hover:border-slate-600 hover:text-slate-100"
+		>Search</button>
+		if q != "" {
+			<a
+				href={ templ.SafeURL(projectFilterHref(project, activeType, "", sort)) }
+				class="text-xs text-slate-500 hover:text-slate-300"
+			>Clear</a>
+		}
+	</form>
+}
+
+templ sortForm(project, q, activeType, sort string) {
+	<form method="get" action={ templ.SafeURL(fmt.Sprintf("/p/%s", project)) } class="flex items-center gap-2">
+		<label for="sort" class="text-xs text-slate-500">Sort</label>
+		<select
+			id="sort"
+			name="sort"
+			class="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-200 focus:border-emerald-500 focus:outline-none"
+			onchange="this.form.submit()"
+		>
+			<option value="date_desc" selected?={ sort == "date_desc" || sort == "" }>Newest first</option>
+			<option value="date_asc" selected?={ sort == "date_asc" }>Oldest first</option>
+		</select>
+		if activeType != "" {
+			<input type="hidden" name="type" value={ activeType }/>
+		}
+		if q != "" {
+			<input type="hidden" name="q" value={ q }/>
+		}
+		<button
+			type="submit"
+			class="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-300 hover:border-slate-600 hover:text-slate-100"
+		>Apply</button>
+	</form>
+}
+
+templ projectTypeFilter(project string, options []string, activeType, q, sort string, sortExplicit bool) {
+	<form method="get" action={ templ.SafeURL(fmt.Sprintf("/p/%s", project)) } class="flex items-center gap-2">
+		<label for="type-select" class="text-xs text-slate-500">Type</label>
+		<select
+			id="type-select"
+			name="type"
+			class="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-200 focus:border-emerald-500 focus:outline-none"
+		>
+			<option value="" selected?={ activeType == "" }>All types</option>
+			for _, t := range options {
+				<option value={ t } selected?={ t == activeType }>{ t }</option>
+			}
+		</select>
+		if q != "" {
+			<input type="hidden" name="q" value={ q }/>
+		}
+		if sortExplicit && sort != "" {
+			<input type="hidden" name="sort" value={ sort }/>
+		}
+		<button
+			type="submit"
+			class="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-300 hover:border-slate-600 hover:text-slate-100"
+		>Apply</button>
+	</form>
+}
+
+templ observationList(obs []client.Observation, from string) {
+	<ul class="space-y-2">
+		for _, o := range obs {
+			@observationRow(o, from)
+		}
+	</ul>
+}
+
+templ emptyProject() {
+	<p class="rounded-lg border border-dashed border-slate-800 p-6 text-center text-sm text-slate-500">
+		No observations to show for this project.
+	</p>
+}
+
+// projectFilterHref constructs a URL for /p/{project} preserving only non-empty params.
+func projectFilterHref(project, typ, q, sort string) string {
+	v := url.Values{}
+	if typ != "" {
+		v.Set("type", typ)
+	}
+	if q != "" {
+		v.Set("q", q)
+	}
+	if sort != "" && sort != "date_desc" {
+		v.Set("sort", sort)
+	}
+	base := fmt.Sprintf("/p/%s", project)
+	if len(v) == 0 {
+		return base
+	}
+	return base + "?" + v.Encode()
+}

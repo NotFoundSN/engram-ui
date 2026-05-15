@@ -2,59 +2,86 @@ package views
 
 import (
 	"fmt"
-	"strings"
+	"net/url"
 
 	"github.com/Gentleman-Programming/engram-ui/internal/client"
 )
 
-templ Home(stats *client.Stats, recent []client.Observation) {
+type HomeData struct {
+	Cards []ProjectCard
+}
+
+type ProjectCard struct {
+	Name           string
+	SessionPreview string // truncated to 140 runes (rune-safe); empty when HasSession=false
+	HasSession     bool
+}
+
+templ Home(d HomeData) {
 	@Layout("Home") {
-		<section class="mb-10">
-			<h1 class="mb-1 text-2xl font-semibold tracking-tight">Memory overview</h1>
-			<p class="text-sm text-slate-400">Aggregate stats across all projects.</p>
-			<div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-				@statCard("Sessions", stats.TotalSessions)
-				@statCard("Observations", stats.TotalObservations)
-				@statCard("Prompts", stats.TotalPrompts)
-				@statCard("Projects", len(stats.Projects))
-			</div>
-			if len(stats.Projects) > 0 {
-				<p class="mt-4 text-xs text-slate-500">
-					Projects: { strings.Join(stats.Projects, ", ") }
-				</p>
-			}
+		<section class="mb-8">
+			<h1 class="mb-1 text-2xl font-semibold tracking-tight">Projects</h1>
+			<p class="text-sm text-slate-400">All projects tracked in engram.</p>
 		</section>
-		<section>
-			<div class="mb-4 flex items-baseline justify-between">
-				<h2 class="text-lg font-semibold tracking-tight">Recent observations</h2>
-				<span class="text-xs text-slate-500">{ fmt.Sprintf("%d shown", len(recent)) }</span>
-			</div>
-			if len(recent) == 0 {
-				<p class="rounded-lg border border-dashed border-slate-800 p-6 text-center text-sm text-slate-500">
-					No observations yet.
-				</p>
-			} else {
-				<ul class="space-y-2">
-					for _, o := range recent {
-						@observationRow(o)
-					}
-				</ul>
-			}
-		</section>
+		if len(d.Cards) == 0 {
+			@emptyHome()
+		} else {
+			@projectGrid(d.Cards)
+		}
 	}
 }
 
-templ statCard(label string, value int) {
-	<div class="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
-		<div class="text-xs uppercase tracking-wider text-slate-500">{ label }</div>
-		<div class="mt-1 text-2xl font-semibold text-slate-100">{ fmt.Sprintf("%d", value) }</div>
+templ projectGrid(cards []ProjectCard) {
+	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+		for _, c := range cards {
+			@projectCard(c)
+		}
 	</div>
 }
 
-templ observationRow(o client.Observation) {
+templ projectCard(c ProjectCard) {
+	<a
+		href={ templ.SafeURL(fmt.Sprintf("/p/%s", c.Name)) }
+		class="block rounded-lg border border-slate-800 bg-slate-900/40 p-5 transition hover:border-slate-700 hover:bg-slate-900/80"
+	>
+		<div class="mb-2 font-mono text-sm font-semibold text-slate-100">{ c.Name }</div>
+		if c.HasSession {
+			<p class="line-clamp-3 text-xs text-slate-400">{ c.SessionPreview }</p>
+		} else {
+			<p class="text-xs text-slate-600">No session yet</p>
+		}
+	</a>
+}
+
+templ emptyHome() {
+	<p class="rounded-lg border border-dashed border-slate-800 p-6 text-center text-sm text-slate-500">
+		No projects yet. Start a session in any tool that writes to engram, and projects will show up here.
+	</p>
+}
+
+templ chip(label string, href templ.SafeURL, isActive bool) {
+	if isActive {
+		<a
+			href={ href }
+			class="rounded-full border border-emerald-400/60 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-200"
+		>{ label }</a>
+	} else {
+		<a
+			href={ href }
+			class="rounded-full border border-slate-800 bg-slate-900/40 px-3 py-1 text-xs text-slate-400 hover:border-slate-700 hover:text-slate-200"
+		>{ label }</a>
+	}
+}
+
+templ observationRow(o client.Observation, from string) {
 	<li>
 		<a
-			href={ templ.SafeURL(fmt.Sprintf("/observations/%d", o.ID)) }
+			href={ templ.SafeURL(func() string {
+				if from != "" {
+					return fmt.Sprintf("/observations/%d?from=%s", o.ID, url.QueryEscape(from))
+				}
+				return fmt.Sprintf("/observations/%d", o.ID)
+			}()) }
 			class="block rounded-md border border-slate-800 bg-slate-900/40 p-4 transition hover:border-slate-700 hover:bg-slate-900/80"
 		>
 			<div class="flex items-baseline justify-between gap-4">
@@ -65,9 +92,6 @@ templ observationRow(o client.Observation) {
 			</div>
 			<div class="mt-1 flex items-center gap-3 text-xs text-slate-500">
 				<span>{ o.CreatedAt }</span>
-				if o.Project != nil {
-					<span>· { *o.Project }</span>
-				}
 				if o.TopicKey != nil {
 					<span class="font-mono text-slate-600">· { *o.TopicKey }</span>
 				}
