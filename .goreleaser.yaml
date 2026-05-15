@@ -1,0 +1,61 @@
+# Install goreleaser (v2): https://goreleaser.com/install/
+#   Windows (scoop): scoop install goreleaser
+#   macOS (brew):    brew install goreleaser/tap/goreleaser
+#   Linux:           curl -sfL https://goreleaser.com/static/run | bash
+# Snapshot test (no git tag required): goreleaser release --snapshot --clean
+# Release (requires v* tag):           goreleaser release --clean
+version: 2
+
+project_name: engram-ui
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - main: ./cmd/engram-ui
+    binary: engram-ui
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/Gentleman-Programming/engram-ui/internal/cli.version={{.Version}}
+
+archives:
+  - formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+brews:
+  - repository:
+      owner: Gentleman-Programming
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    name: engram-ui
+    homepage: "https://github.com/Gentleman-Programming/engram-ui"
+    description: "Web viewer for engram persistent memory. Single binary, zero config."
+    license: "MIT"
+    commit_msg_template: "chore: update engram-ui formula to {{ .Tag }}"
