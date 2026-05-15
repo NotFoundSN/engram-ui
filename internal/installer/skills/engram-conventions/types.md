@@ -56,13 +56,13 @@ decision — use `decision` or `architecture` instead.
 
 **Example `mem_save` call**:
 ```
-mem_save(
-  title="Compared SSE vs WebSocket for live observation updates",
-  type="exploration",
-  topic_key="sdd/live-updates/explore",
-  project="engram-ui",
-  content="## Investigated\nReal-time delivery of new observations to engram-ui.\n\n## Approaches\n- SSE: simpler, HTTP/1.1 compatible, server-push only\n- WebSocket: bidirectional, more complex, overkill here\n\n## Recommendation\nSSE — sufficient for read-only push, less infrastructure."
-)
+mem_save({
+  "title": "Compared SSE vs WebSocket for live observation updates",
+  "type": "exploration",
+  "topic_key": "sdd/live-updates/explore",
+  "project": "engram-ui",
+  "content": "## Investigated\nReal-time delivery of new observations to engram-ui.\n\n## Approaches\n- SSE: simpler, HTTP/1.1 compatible, server-push only\n- WebSocket: bidirectional, more complex, overkill here\n\n## Recommendation\nSSE — sufficient for read-only push, less infrastructure."
+})
 ```
 
 ---
@@ -91,13 +91,13 @@ are written. The output of `sdd-propose`.
 
 **Example `mem_save` call**:
 ```
-mem_save(
-  title="Proposal: auth refactor with JWT rotation",
-  type="proposal",
-  topic_key="sdd/auth-refactor/proposal",
-  project="myapp",
-  content="## Intent\nCurrent session tokens never expire. Need short-lived JWTs with refresh rotation.\n\n## Scope\nIn: token issuance, refresh endpoint, middleware. Out: OAuth providers (V2).\n\n## Approach\nReplace session table with signed JWTs. Refresh tokens stored httpOnly cookies."
-)
+mem_save({
+  "title": "Proposal: auth refactor with JWT rotation",
+  "type": "proposal",
+  "topic_key": "sdd/auth-refactor/proposal",
+  "project": "myapp",
+  "content": "## Intent\nCurrent session tokens never expire. Need short-lived JWTs with refresh rotation.\n\n## Scope\nIn: token issuance, refresh endpoint, middleware. Out: OAuth providers (V2).\n\n## Approach\nReplace session table with signed JWTs. Refresh tokens stored httpOnly cookies."
+})
 ```
 
 ---
@@ -124,13 +124,13 @@ for that.
 
 **Example `mem_save` call**:
 ```
-mem_save(
-  title="Spec: auth refactor requirements",
-  type="spec",
-  topic_key="sdd/auth-refactor/spec",
-  project="myapp",
-  content="## Requirements\n- Tokens expire after 15 minutes\n- Refresh tokens valid 7 days\n- Refresh rotates on use\n\n## Scenarios\n- Given expired token, when client sends request, then 401 returned\n- Given valid refresh token, when client calls /refresh, then new token pair issued"
-)
+mem_save({
+  "title": "Spec: auth refactor requirements",
+  "type": "spec",
+  "topic_key": "sdd/auth-refactor/spec",
+  "project": "myapp",
+  "content": "## Requirements\n- Tokens expire after 15 minutes\n- Refresh tokens valid 7 days\n- Refresh rotates on use\n\n## Scenarios\n- Given expired token, when client sends request, then 401 returned\n- Given valid refresh token, when client calls /refresh, then new token pair issued"
+})
 ```
 
 ---
@@ -159,13 +159,13 @@ across multiple domains — use `architecture` for that.
 
 **Example `mem_save` call**:
 ```
-mem_save(
-  title="Design: token rotation strategy",
-  type="design",
-  topic_key="sdd/auth-refactor/design",
-  project="myapp",
-  content="## Decisions\n- Stateless JWTs signed with HMAC-SHA256\n- Refresh tokens stored in DB with revocation list\n\n## Approach\nAccess token: 15-min signed JWT. Refresh token: opaque 32-byte random, stored hashed.\n\n## Tradeoffs\nStateless access tokens cannot be revoked early — acceptable for 15-min TTL."
-)
+mem_save({
+  "title": "Design: token rotation strategy",
+  "type": "design",
+  "topic_key": "sdd/auth-refactor/design",
+  "project": "myapp",
+  "content": "## Decisions\n- Stateless JWTs signed with HMAC-SHA256\n- Refresh tokens stored in DB with revocation list\n\n## Approach\nAccess token: 15-min signed JWT. Refresh token: opaque 32-byte random, stored hashed.\n\n## Tradeoffs\nStateless access tokens cannot be revoked early — acceptable for 15-min TTL."
+})
 ```
 
 ---
@@ -193,13 +193,13 @@ The output of `superpowers:writing-plans`.
 
 **Example `mem_save` call**:
 ```
-mem_save(
-  title="Plan: auth refactor implementation",
-  type="plan",
-  topic_key="superpowers/auth-refactor/plan",
-  project="myapp",
-  content="## Steps\n1. Add JWT library\n2. Implement token issuance endpoint\n3. Implement refresh endpoint\n4. Update middleware\n5. Write integration tests\n\n## Order\nMiddleware last — depends on issuance being complete.\n\n## Validation\nIntegration test suite passes. Existing session tests updated."
-)
+mem_save({
+  "title": "Plan: auth refactor implementation",
+  "type": "plan",
+  "topic_key": "superpowers/auth-refactor/plan",
+  "project": "myapp",
+  "content": "## Steps\n1. Add JWT library\n2. Implement token issuance endpoint\n3. Implement refresh endpoint\n4. Update middleware\n5. Write integration tests\n\n## Order\nMiddleware last — depends on issuance being complete.\n\n## Validation\nIntegration test suite passes. Existing session tests updated."
+})
 ```
 
 ---
@@ -218,13 +218,13 @@ for that.
 
 **Example `mem_save` call**:
 ```
-mem_save(
-  title="Tasks: auth refactor (8 items)",
-  type="tasks",
-  topic_key="sdd/auth-refactor/tasks",
-  project="myapp",
-  content="- [ ] Add `golang-jwt/jwt` dependency\n- [ ] Create `internal/auth/token.go` with Issue() and Verify()\n- [ ] Add POST /api/refresh endpoint\n- [ ] Update auth middleware to parse JWT\n- [ ] Add refresh token DB table and migration\n- [ ] Write unit tests for token.go\n- [ ] Write integration test for full auth flow\n- [ ] Update README auth section"
-)
+mem_save({
+  "title": "Tasks: auth refactor (8 items)",
+  "type": "tasks",
+  "topic_key": "sdd/auth-refactor/tasks",
+  "project": "myapp",
+  "content": "- [ ] Add `golang-jwt/jwt` dependency\n- [ ] Create `internal/auth/token.go` with Issue() and Verify()\n- [ ] Add POST /api/refresh endpoint\n- [ ] Update auth middleware to parse JWT\n- [ ] Add refresh token DB table and migration\n- [ ] Write unit tests for token.go\n- [ ] Write integration test for full auth flow\n- [ ] Update README auth section"
+})
 ```
 
 ---
@@ -266,13 +266,13 @@ status snapshot (apply progress, partial completion, CI result).
 
 **Example `mem_save` call**:
 ```
-mem_save(
-  title="Verify report: auth refactor — 0 CRITICAL",
-  type="report",
-  topic_key="sdd/auth-refactor/verify-report",
-  project="myapp",
-  content="## CRITICAL\n(none)\n\n## WARNING\n- Refresh token cleanup job not implemented (deferred to V2)\n\n## SUGGESTION\n- Consider adding token blacklist for admin-forced logout"
-)
+mem_save({
+  "title": "Verify report: auth refactor — 0 CRITICAL",
+  "type": "report",
+  "topic_key": "sdd/auth-refactor/verify-report",
+  "project": "myapp",
+  "content": "## CRITICAL\n(none)\n\n## WARNING\n- Refresh token cleanup job not implemented (deferred to V2)\n\n## SUGGESTION\n- Consider adding token blacklist for admin-forced logout"
+})
 ```
 
 ---
@@ -305,13 +305,13 @@ multiple domains — use `architecture` for that.
 
 **Example `mem_save` call**:
 ```
-mem_save(
-  title="Decision: httpOnly cookies over localStorage for refresh tokens",
-  type="decision",
-  topic_key="decision/cookie-vs-localstorage",
-  project="myapp",
-  content="## What\nRefresh tokens stored in httpOnly cookies, not localStorage.\n\n## Why\nXSS cannot read httpOnly cookies. localStorage is accessible to JS.\n\n## Where\nPOST /api/refresh sets Set-Cookie header. Frontend never reads the token.\n\n## Learned\nSameSite=Strict breaks cross-origin flows — use SameSite=Lax for redirect-based OAuth."
-)
+mem_save({
+  "title": "Decision: httpOnly cookies over localStorage for refresh tokens",
+  "type": "decision",
+  "topic_key": "decision/cookie-vs-localstorage",
+  "project": "myapp",
+  "content": "## What\nRefresh tokens stored in httpOnly cookies, not localStorage.\n\n## Why\nXSS cannot read httpOnly cookies. localStorage is accessible to JS.\n\n## Where\nPOST /api/refresh sets Set-Cookie header. Frontend never reads the token.\n\n## Learned\nSameSite=Strict breaks cross-origin flows — use SameSite=Lax for redirect-based OAuth."
+})
 ```
 
 ---
@@ -344,13 +344,13 @@ Multiple domains or subsystems affected.
 
 **Example `mem_save` call**:
 ```
-mem_save(
-  title="Architecture: hexagonal layout for auth domain",
-  type="architecture",
-  topic_key="architecture/auth-model",
-  project="myapp",
-  content="## What\nAuth domain follows hexagonal architecture with explicit ports and adapters.\n\n## Why\nAllows swapping HTTP handler or DB adapter without touching business logic. Testable in isolation.\n\n## Where\ninternal/auth/ — core/, ports/, adapters/http/, adapters/db/\n\n## Tradeoffs\nMore files and interfaces up front. Worth it for testability and replaceability."
-)
+mem_save({
+  "title": "Architecture: hexagonal layout for auth domain",
+  "type": "architecture",
+  "topic_key": "architecture/auth-model",
+  "project": "myapp",
+  "content": "## What\nAuth domain follows hexagonal architecture with explicit ports and adapters.\n\n## Why\nAllows swapping HTTP handler or DB adapter without touching business logic. Testable in isolation.\n\n## Where\ninternal/auth/ — core/, ports/, adapters/http/, adapters/db/\n\n## Tradeoffs\nMore files and interfaces up front. Worth it for testability and replaceability."
+})
 ```
 
 ---
@@ -382,13 +382,13 @@ or `discovery` instead.
 
 **Example `mem_save` call**:
 ```
-mem_save(
-  title="Fixed N+1 query in UserList",
-  type="bugfix",
-  topic_key="bugfix/n-plus-one-userlist",
-  project="myapp",
-  content="## What\nUserList was issuing one SQL query per row to fetch the associated org.\n\n## Why\nGORM's lazy-loading triggered on `user.Org` access inside the loop.\n\n## Where\ninternal/user/list.go — added Preload(\"Org\") to the base query.\n\n## Learned\nGORM does not preload by default. Any association access in a loop is an N+1 unless Preload() is explicit."
-)
+mem_save({
+  "title": "Fixed N+1 query in UserList",
+  "type": "bugfix",
+  "topic_key": "bugfix/n-plus-one-userlist",
+  "project": "myapp",
+  "content": "## What\nUserList was issuing one SQL query per row to fetch the associated org.\n\n## Why\nGORM's lazy-loading triggered on `user.Org` access inside the loop.\n\n## Where\ninternal/user/list.go — added Preload(\"Org\") to the base query.\n\n## Learned\nGORM does not preload by default. Any association access in a loop is an N+1 unless Preload() is explicit."
+})
 ```
 
 ---
@@ -421,13 +421,13 @@ for that.
 
 **Example `mem_save` call**:
 ```
-mem_save(
-  title="Pattern: prefix integration tests with _e2e",
-  type="pattern",
-  topic_key="pattern/e2e-test-suffix",
-  project="myapp",
-  content="## What\nAll integration tests that hit the real DB or network are prefixed with `_e2e` in the filename.\n\n## Why\nAllows `go test ./... -run '^[^_]'` to skip integration tests in CI fast lane.\n\n## Where\nAll test files in tests/integration/\n\n## Learned\nGo build tags are an alternative but require flag discipline. Prefix is simpler and visible."
-)
+mem_save({
+  "title": "Pattern: prefix integration tests with _e2e",
+  "type": "pattern",
+  "topic_key": "pattern/e2e-test-suffix",
+  "project": "myapp",
+  "content": "## What\nAll integration tests that hit the real DB or network are prefixed with `_e2e` in the filename.\n\n## Why\nAllows `go test ./... -run '^[^_]'` to skip integration tests in CI fast lane.\n\n## Where\nAll test files in tests/integration/\n\n## Learned\nGo build tags are an alternative but require flag discipline. Prefix is simpler and visible."
+})
 ```
 
 ---
@@ -459,13 +459,13 @@ constraints in the codebase, libraries, or infrastructure.
 
 **Example `mem_save` call**:
 ```
-mem_save(
-  title="Discovery: FTS5 strips digits, breaks search for version strings",
-  type="discovery",
-  topic_key="discovery/fts5-strips-digits",
-  project="engram-ui",
-  content="## What\nSQLite FTS5 tokenizer strips standalone digit sequences by default.\n\n## Why it matters\nSearching for 'v1' or '404' returns no results even when present in content.\n\n## Where\nengram/internal/store/fts.go — tokenizer config\n\n## Learned\nUse `unicode61 tokenchars` or `ascii` tokenizer to preserve digits. Requires FTS index rebuild."
-)
+mem_save({
+  "title": "Discovery: FTS5 strips digits, breaks search for version strings",
+  "type": "discovery",
+  "topic_key": "discovery/fts5-strips-digits",
+  "project": "engram-ui",
+  "content": "## What\nSQLite FTS5 tokenizer strips standalone digit sequences by default.\n\n## Why it matters\nSearching for 'v1' or '404' returns no results even when present in content.\n\n## Where\nengram/internal/store/fts.go — tokenizer config\n\n## Learned\nUse `unicode61 tokenchars` or `ascii` tokenizer to preserve digits. Requires FTS index rebuild."
+})
 ```
 
 ---
@@ -498,13 +498,13 @@ descriptive)
 
 **Example `mem_save` call**:
 ```
-mem_save(
-  title="Config: switched test DB to SQLite in-memory",
-  type="config",
-  topic_key="config/test-db-sqlite",
-  project="myapp",
-  content="## What\nTest suite now uses `sqlite3 :memory:` instead of a local Postgres instance.\n\n## Why\nCI setup was flaky due to Postgres port conflicts. In-memory SQLite is zero-setup.\n\n## Where\nconfig/test.yaml — DB_URL changed. Makefile target `test` no longer needs `docker compose up`.\n\n## Learned\nSQLite lacks some Postgres features (e.g., RETURNING on UPDATE). Two tests were rewritten."
-)
+mem_save({
+  "title": "Config: switched test DB to SQLite in-memory",
+  "type": "config",
+  "topic_key": "config/test-db-sqlite",
+  "project": "myapp",
+  "content": "## What\nTest suite now uses `sqlite3 :memory:` instead of a local Postgres instance.\n\n## Why\nCI setup was flaky due to Postgres port conflicts. In-memory SQLite is zero-setup.\n\n## Where\nconfig/test.yaml — DB_URL changed. Makefile target `test` no longer needs `docker compose up`.\n\n## Learned\nSQLite lacks some Postgres features (e.g., RETURNING on UPDATE). Two tests were rewritten."
+})
 ```
 
 ---
@@ -533,13 +533,13 @@ or `architecture` for that.
 
 **Example `mem_save` call**:
 ```
-mem_save(
-  title="Preference: always use httpOnly cookies, never localStorage",
-  type="preference",
-  topic_key="preference/cookie-style",
-  project="myapp",
-  content="## What\nUser requires all tokens to be stored in httpOnly cookies.\n\n## Why\nSecurity policy — XSS protection is non-negotiable.\n\n## Where\nAny feature that stores tokens or session identifiers."
-)
+mem_save({
+  "title": "Preference: always use httpOnly cookies, never localStorage",
+  "type": "preference",
+  "topic_key": "preference/cookie-style",
+  "project": "myapp",
+  "content": "## What\nUser requires all tokens to be stored in httpOnly cookies.\n\n## Why\nSecurity policy — XSS protection is non-negotiable.\n\n## Where\nAny feature that stores tokens or session identifiers."
+})
 ```
 
 ---

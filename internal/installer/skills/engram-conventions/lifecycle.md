@@ -15,29 +15,147 @@ and updates.
 | `mem_search` with exact `topic_key` | Timeline of an artifact | Returns all revisions oldest → newest |
 | `mem_current_project` | Verify cwd → project mapping | Use when multi-repo setup is uncertain |
 
-> **Note on `topic_key_prefix`**: The examples below use `topic_key_prefix` as the canonical query parameter, which engram-ui supports natively against its store. Engram's MCP `mem_search` tool today only exposes `query`, `type`, `project`, `scope`, and `limit` parameters — to achieve prefix queries via MCP, either (a) use `query` with the prefix as a keyword (FTS will match observations whose content or title mentions the prefix), or (b) request observations by exact `topic_key` for revisions, or (c) fetch a broader set and post-filter results by their `topic_key` field. The convention itself remains: stable namespaced keys enable prefix grouping wherever the consumer supports it.
+> **Note on `topic_key_prefix`**: `topic_key_prefix` is a documented
+> **convention** in this skill — it is NOT a parameter exposed by the
+> engram MCP `mem_search` tool today. MCP `mem_search` accepts `query`,
+> `type`, `project`, `scope`, `topic_key`, and `limit`.
+>
+> To achieve prefix-style queries via MCP, use one of these workarounds:
+> (a) request by exact `topic_key` (returns the timeline of one
+> observation); (b) filter by `type` plus a `query` keyword and post-filter
+> results in your client by `topic_key.startswith("<prefix>")`;
+> (c) use `query` with the prefix string as a keyword — FTS will match
+> observations whose content or title mentions the prefix.
+>
+> Engram-side native `topic_key_prefix` support on `mem_search` is tracked
+> as the v1 W-1 follow-up. When it ships, the workarounds below collapse
+> to a single direct call.
 
-**Query shape**: combine `query` (keywords) + `type` + `topic_key_prefix`.
-Bare keyword search in a busy project is noisy. At minimum, add a `type` or
-`topic_key_prefix` to narrow results.
+**Query shape**: combine `query` (keywords) + `type`. Bare keyword search in
+a busy project is noisy. At minimum, add a `type` to narrow results. Use
+`topic_key` for exact artifact lookup. For prefix-style scoping, see the note
+above and post-filter by `topic_key.startswith("<prefix>")`.
 
 **Examples:**
 ```
 # Start of session — always first
-mem_context(project="myapp")
+mem_context({"project": "myapp"})
 
-# Find by type and prefix (narrow, low noise)
-mem_search(type="spec", topic_key_prefix="sdd/auth-refactor/", project="myapp")
+# Find by type (narrow, low noise)
+mem_search({"type": "spec", "query": "auth-refactor", "project": "myapp"})
+# Then in your code: filter results where topic_key.startswith("sdd/auth-refactor/")
 
 # Timeline of one artifact
-mem_search(topic_key="sdd/auth-refactor/spec", project="myapp")
+mem_search({"topic_key": "sdd/auth-refactor/spec", "project": "myapp"})
 
 # Get full content (required after search)
-mem_get_observation(id=<id from search result>)
+mem_get_observation({"id": "<id from search result>"})
 
 # Verify project mapping
-mem_current_project()
+mem_current_project({})
 ```
+
+---
+
+## Surfacing memories to the user via URL
+
+After saving an observation, the agent MAY emit a shareable URL so the user
+can open it in engram-ui for review.
+
+### Format
+
+```
+Review: http://localhost:7438/observations/{id}
+```
+
+`{id}` is the `id` field returned in the `mem_save` response envelope.
+`7438` is engram-ui's default port.
+
+### Custom installs — `ENGRAM_UI_URL`
+
+If the user runs engram-ui on a non-default host or port, the convention is
+to read `ENGRAM_UI_URL` from the environment and substitute it for the
+`http://localhost:7438` prefix. Example: `ENGRAM_UI_URL=http://10.0.0.5:9000`
+→ emit `Review: http://10.0.0.5:9000/observations/{id}`.
+
+### Fallback — engram-ui not installed
+
+If engram-ui is not installed or not running, the emitted URL is
+informational: clicking it fails locally, but the underlying engram save
+succeeded. The skill stays useful — emitting the URL is never required for
+correctness.
+
+### Presentation
+
+A single line in the agent's response, immediately after the save
+confirmation. Example:
+
+> Saved `sdd/auth-refactor/spec` to engram (id 124). Review: http://localhost:7438/observations/124
+
+**Situations where surfacing the URL is appropriate:**
+
+- The agent just generated a spec, design, proposal, plan, or report and the
+  user is expected to review or approve it before the next step.
+- The user is in interactive review mode — a back-and-forth conversation
+  where every phase pauses for approval.
+- The saved content is substantial (more than ~500 characters) and reading
+  it in engram-ui is friendlier than scrolling back through chat.
+- The agent suspects the user wants to validate its reasoning before the
+  next action (e.g., before launching the next SDD phase).
+
+**Situations where surfacing the URL is noise:**
+
+- A chain of automated saves where a single URL at the end of the chain is
+  enough.
+- Trivial saves (one-line bugfix note, short pattern note, single sentence
+  preference).
+- The agent is running in autonomous mode without user checkpoints
+  (background work, batch operations).
+- Internal bookkeeping saves (apply-progress checkpoints, session summaries
+  written implicitly at session end).
+
+Final judgement belongs to the agent reading the live conversation. The skill
+provides guidance — never a rigid trigger. The capability stays useful
+regardless of which situations the agent chooses.
+
+---
+
+## When to use engram vs a standalone .md file
+
+Workflow artifacts and human-review documents are easier to find, link, and
+revise when they live in engram instead of as files on disk. This is a
+preference, not an absolute rule — some artifacts genuinely belong on disk.
+
+**PREFER engram for** (no shadow `docs/specs/*.md` or `docs/designs/*.md`):
+
+- Specs, designs, proposals, plans, exploration write-ups
+- Verify reports, archive reports, apply-progress snapshots
+- Decision and architecture notes generated during a workflow
+- Anything intended for human review that the agent just produced
+
+Save these via `mem_save` with the appropriate `type` and `topic_key`. The
+agent may surface a `Review: ...` URL (see the section above) so the user
+can open it in engram-ui.
+
+**Exceptions — keep these on disk:**
+
+- `README.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `LICENSE`
+- Source-code docstrings and inline comments
+- Project-level long-lived public docs (`docs/getting-started.md`,
+  user-facing guides, public-API references)
+- Architecture decision records (ADRs) intended for permanent public
+  consumption — debatable; the agent MAY save these to engram too if it
+  wants searchability
+
+The strength of this guidance is **PREFER**, not **NEVER**. If the agent
+needs to produce a `.md` file for a legitimate reason (publication,
+external sharing, the user explicitly asked for a file), that remains
+valid.
+
+**Carve-out — Superpowers**: the upstream `brainstorming` and
+`writing-plans` Superpowers skills write `.md` files as part of their
+behavior. See `workflows/superpowers.md` for the conditional rule (dual
+save when Superpowers, engram-only otherwise).
 
 ---
 
@@ -99,10 +217,10 @@ optional.
 
 **Example call:**
 ```
-mem_session_summary(
-  content="## Goal\nImplemented JWT token rotation for auth refactor.\n\n## Discoveries\n- GORM lazy-loads associations; Preload() required to avoid N+1\n- SameSite=Strict breaks OAuth redirect flow\n\n## Accomplished\n- Token issuance endpoint complete\n- Refresh endpoint complete\n- Integration tests passing (8/8)\n\n## Next Steps\n- Implement token cleanup job\n- Update OpenAPI spec\n\n## Relevant Files\n- internal/auth/token.go — JWT issue and verify\n- internal/auth/refresh.go — refresh endpoint handler",
-  project="myapp"
-)
+mem_session_summary({
+  "content": "## Goal\nImplemented JWT token rotation for auth refactor.\n\n## Discoveries\n- GORM lazy-loads associations; Preload() required to avoid N+1\n- SameSite=Strict breaks OAuth redirect flow\n\n## Accomplished\n- Token issuance endpoint complete\n- Refresh endpoint complete\n- Integration tests passing (8/8)\n\n## Next Steps\n- Implement token cleanup job\n- Update OpenAPI spec\n\n## Relevant Files\n- internal/auth/token.go — JWT issue and verify\n- internal/auth/refresh.go — refresh endpoint handler",
+  "project": "myapp"
+})
 ```
 
 ---
@@ -118,11 +236,11 @@ candidate's own `judgment_id`** — not the top-level one.
 
 ```
 # For each candidate in candidates[]:
-mem_judge(
-  judgment_id=<candidate.judgment_id>,
-  relation=<your assessed relation>,
-  confidence=<0.0–1.0>
-)
+mem_judge({
+  "judgment_id": "<candidate.judgment_id>",
+  "relation": "<your assessed relation>",
+  "confidence": "<0.0–1.0>"
+})
 ```
 
 ### Heuristic — ask the user when:
@@ -155,23 +273,23 @@ superseding the old one?"*
 **Example — correcting a typo:**
 ```
 # Find the observation to fix
-mem_search(topic_key="sdd/auth-refactor/spec", project="myapp")
+mem_search({"topic_key": "sdd/auth-refactor/spec", "project": "myapp"})
 # Get the full content and ID
-mem_get_observation(id=<id>)
+mem_get_observation({"id": "<id>"})
 # Update with the corrected content
-mem_update(id=<id>, title="Spec: auth refactor requirements", content="<corrected content>")
+mem_update({"id": "<id>", "title": "Spec: auth refactor requirements", "content": "<corrected content>"})
 ```
 
 **Example — upsert (same topic evolving):**
 ```
 # Add a new requirement to an existing spec — same topic_key
-mem_save(
-  topic_key="sdd/auth-refactor/spec",
-  type="spec",
-  title="Spec: auth refactor requirements",
-  project="myapp",
-  content="<updated content with new requirements added>"
-)
+mem_save({
+  "topic_key": "sdd/auth-refactor/spec",
+  "type": "spec",
+  "title": "Spec: auth refactor requirements",
+  "project": "myapp",
+  "content": "<updated content with new requirements added>"
+})
 # revision_count is now incremented; previous version preserved in history
 ```
 
@@ -193,13 +311,13 @@ explicitly, those observations are permanently lost from persistent memory.
 **Example recovery:**
 ```
 # Step 1 — save pre-compaction work
-mem_session_summary(
-  content="<paste or reconstruct the compacted summary here>",
-  project="myapp"
-)
+mem_session_summary({
+  "content": "<paste or reconstruct the compacted summary here>",
+  "project": "myapp"
+})
 
 # Step 2 — recover broader context
-mem_context(project="myapp")
+mem_context({"project": "myapp"})
 
 # Step 3 — continue where you left off
 ```

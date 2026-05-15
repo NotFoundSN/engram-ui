@@ -42,6 +42,13 @@ not in the API.
    search is noisy in busy projects.
 5. **session end** — always call `mem_session_summary` before saying "done".
    See `lifecycle.md`.
+6. **shareable URLs** — when the user is likely to want to read or validate
+   saved content (spec/design/proposal/plan/report just generated, interactive
+   review mode, substantial content), SHOULD emit
+   `Review: http://localhost:7438/observations/{id}` (`{id}` from the
+   `mem_save` response) so they can review in engram-ui. MAY skip for trivial
+   saves or autonomous chains. See `lifecycle.md` for full format,
+   `ENGRAM_UI_URL` override, fallback, and situational guidance.
 
 ---
 
@@ -58,19 +65,38 @@ not in the API.
 | Saving output from an SDD phase | `workflows/sdd.md` |
 | Saving output from a Superpowers skill | `workflows/superpowers.md` |
 | Saving a decision, bugfix, discovery, pattern, config, or preference | `workflows/ad-hoc.md` |
+| Surfacing a saved memory's URL to the user | `lifecycle.md#surfacing-memories-to-the-user-via-url` |
+| Choosing between a `.md` file and an engram save | `lifecycle.md#when-to-use-engram-vs-a-standalone-md-file` |
 
 ---
 
 ## Compatibility
 
 Designed against the Agent Skills spec. Works with:
-- **Claude Code** — loads from `~/.claude/skills/` (global) or `.claude/skills/`
-  (project-local).
-- **opencode** — loads from its configured skills directory.
+- **Claude Code** — loads `SKILL.md` from `~/.claude/skills/` (global) or
+  `.claude/skills/` (project-local).
+- **OpenCode** — loads from several locations (any of these works):
+  - `~/.config/opencode/skills/` (global native — on Windows, this is the
+    literal path `%USERPROFILE%\.config\opencode\skills`, NOT `%APPDATA%`)
+  - `~/.claude/skills/` (cross-tool — OpenCode also reads Claude Code's
+    skills directory)
+  - `~/.agents/skills/` (Agent Skills spec global)
+  - Project-local equivalents: `.opencode/skills/`, `.claude/skills/`,
+    `.agents/skills/`
+  - Override the global root via `$OPENCODE_CONFIG_DIR`
 
-**Installation**: keep the canonical copy at `skills/engram-conventions/` and
-symlink or copy into each tool's skills location. A single source of truth
-avoids drift between tool copies.
+> **Tip**: running `engram-ui setup claude-code` also makes the skill
+> available to OpenCode via `~/.claude/skills/` (cross-tool path). One
+> install command can cover both agents.
+
+**Installation**: run `engram-ui setup claude-code` or
+`engram-ui setup opencode`. The canonical skill source lives in this
+repository at `internal/installer/skills/engram-conventions/` and is
+embedded into the `engram-ui` binary at build time via `//go:embed`. The
+setup commands copy the embedded payload into the target agent's skills
+directory (`~/.claude/skills/engram-conventions/` for Claude Code, etc.).
+Re-run the setup command after upgrading `engram-ui` to refresh the local
+copy.
 
 **Version compatibility**: relies only on standard MCP tool names (`mem_save`,
 `mem_search`, etc.) and the Agent Skills spec `SKILL.md` loading convention.

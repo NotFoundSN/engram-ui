@@ -45,7 +45,7 @@ the git remote or directory name.
 
 To verify the current project is resolved correctly:
 ```
-mem_current_project()
+mem_current_project({})
 ```
 Returns the resolved project name. Call this whenever multi-repo setup is
 uncertain.
@@ -83,13 +83,13 @@ When signals detected and no config exists, prompt the user:
 Record the user's choice immediately as a `preference` observation:
 
 ```
-mem_save(
-  title="Preference: multi-repo memory setup for myapp",
-  type="preference",
-  topic_key="preference/multi-repo-setup",
-  project="myapp",
-  content="## What\nUser chose unified memory under project name 'myapp'.\n\n## Why\nAll three repos (frontend, backend, infra) are part of the same product.\n\n## Where\n.engram/config.json created in each repo root."
-)
+mem_save({
+  "title": "Preference: multi-repo memory setup for myapp",
+  "type": "preference",
+  "topic_key": "preference/multi-repo-setup",
+  "project": "myapp",
+  "content": "## What\nUser chose unified memory under project name 'myapp'.\n\n## Why\nAll three repos (frontend, backend, infra) are part of the same product.\n\n## Where\n.engram/config.json created in each repo root."
+})
 ```
 
 ---
@@ -124,17 +124,23 @@ decision/cookie-vs-localstorage
 
 Query all repos in the product:
 ```
-mem_search(query="auth", project="myapp")
+mem_search({"query": "auth", "project": "myapp"})
 ```
 
-Scope to one repo with `topic_key_prefix`:
+Scope to one repo (post-filter by `topic_key` prefix):
 ```
-mem_search(query="auth", project="myapp", topic_key_prefix="frontend/")
+# Goal: retrieve auth observations scoped to the frontend repo
+# MCP doesn't expose topic_key_prefix; fetch broadly + post-filter:
+mem_search({"query": "auth", "project": "myapp"})
+# Then in your code: filter results where topic_key.startswith("frontend/")
 ```
 
 Scope to one workflow and repo:
 ```
-mem_search(project="myapp", topic_key_prefix="frontend/sdd/auth-refactor/")
+# Goal: retrieve all auth-refactor SDD artifacts for the frontend repo
+# MCP doesn't expose topic_key_prefix; fetch broadly + post-filter:
+mem_search({"query": "auth-refactor", "project": "myapp"})
+# Then in your code: filter results where topic_key.startswith("frontend/sdd/auth-refactor/")
 ```
 
 ---

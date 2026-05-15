@@ -87,16 +87,16 @@ bug-2024-05-14             # date in key — redundant (engram tracks created_at
 **Example — evolving spec (same `topic_key`, upsert):**
 ```
 # First save
-mem_save(topic_key="sdd/auth-refactor/spec", ...)
+mem_save({"topic_key": "sdd/auth-refactor/spec", "...": "..."})
 
 # Later: add more scenarios to the same spec
-mem_save(topic_key="sdd/auth-refactor/spec", ...)  # increments revision_count
+mem_save({"topic_key": "sdd/auth-refactor/spec", "...": "..."})  # increments revision_count
 ```
 
 **Example — moving from spec to design (new `topic_key`):**
 ```
-mem_save(topic_key="sdd/auth-refactor/spec", ...)    # spec phase done
-mem_save(topic_key="sdd/auth-refactor/design", ...)  # design phase — new key
+mem_save({"topic_key": "sdd/auth-refactor/spec", "...": "..."})    # spec phase done
+mem_save({"topic_key": "sdd/auth-refactor/design", "...": "..."})  # design phase — new key
 ```
 
 ---
@@ -109,13 +109,15 @@ an artifact over time.
 
 ```
 # All revisions of the spec for auth-refactor
-mem_search(topic_key="sdd/auth-refactor/spec")
+mem_search({"topic_key": "sdd/auth-refactor/spec"})
 
-# All artifacts for the auth-refactor change
-mem_search(topic_key_prefix="sdd/auth-refactor/")
+# Goal: retrieve all artifacts for the auth-refactor change
+# MCP doesn't expose topic_key_prefix; fetch broadly + post-filter:
+mem_search({"query": "auth-refactor", "project": "myapp"})
+# Then in your code: filter results where topic_key.startswith("sdd/auth-refactor/")
 
 # All proposals in the project
-mem_search(type="proposal", project="myapp")
+mem_search({"type": "proposal", "project": "myapp"})
 ```
 
 Consistent `topic_key` naming is what makes these timeline views possible.
