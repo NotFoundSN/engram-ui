@@ -126,6 +126,7 @@ type RecentOptions struct {
 	Project string
 	Scope   string
 	Limit   int
+	Type    string // filter recent observations by type (e.g. "session_summary")
 }
 
 func (c *Client) RecentObservations(opts RecentOptions) ([]Observation, error) {
@@ -135,6 +136,9 @@ func (c *Client) RecentObservations(opts RecentOptions) ([]Observation, error) {
 	}
 	if opts.Scope != "" {
 		q.Set("scope", opts.Scope)
+	}
+	if opts.Type != "" {
+		q.Set("type", opts.Type)
 	}
 	if opts.Limit > 0 {
 		q.Set("limit", strconv.Itoa(opts.Limit))
