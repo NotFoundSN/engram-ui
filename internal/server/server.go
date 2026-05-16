@@ -2,6 +2,7 @@
 package server
 
 import (
+	"mime"
 	"net/http"
 	"sort"
 	"strconv"
@@ -14,8 +15,15 @@ import (
 	"github.com/Gentleman-Programming/engram-ui/internal/client"
 	"github.com/Gentleman-Programming/engram-ui/internal/engramconv"
 	"github.com/Gentleman-Programming/engram-ui/internal/render"
+	"github.com/Gentleman-Programming/engram-ui/internal/static"
 	"github.com/Gentleman-Programming/engram-ui/internal/views"
 )
+
+func init() {
+	// Windows does not always register font/woff2 in the system MIME table;
+	// register it explicitly so http.FileServer returns the correct Content-Type.
+	_ = mime.AddExtensionType(".woff2", "font/woff2")
+}
 
 // engramClient is the subset of client.Client that handlers need.
 // Kept in the server package so tests can stub it without touching
@@ -53,12 +61,29 @@ func (s *Server) routes() {
 	s.router.Use(middleware.Recoverer)
 	s.router.Use(middleware.Logger)
 
+	// Static asset subrouter — registered first so chi's trie never confuses it
+	// with parameterized routes. Long-cache headers applied at the subrouter scope.
+	s.router.Route("/static", func(r chi.Router) {
+		r.Use(longCacheMiddleware)
+		fs := http.FileServer(http.FS(static.FS()))
+		r.Handle("/*", http.StripPrefix("/static", fs))
+	})
+
 	s.router.Get("/", s.handleHome)
 	s.router.Get("/p/{project}", s.handleProject)
 	s.router.Get("/observations/{id}", s.handleObservation)
 	// Short alias for agent emission — web templates keep using /observations/{id}.
 	s.router.Get("/m/{id}", s.handleObservation)
 	s.router.Get("/healthz", s.handleHealthz)
+}
+
+// longCacheMiddleware sets an immutable long-cache header on all responses it
+// wraps. Mounted only on the /static/* subrouter so no other handler is affected.
+func longCacheMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {

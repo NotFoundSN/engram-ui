@@ -1403,3 +1403,102 @@ func TestHandleHome_PreviewRuneSafe(t *testing.T) {
 		t.Error("response body is not valid UTF-8")
 	}
 }
+
+// --- static asset handler tests (Task 1.3) ---
+
+// TestStaticHandler_CSS verifies that GET /static/app.css returns 200,
+// Content-Type text/css, and Cache-Control: public, max-age=31536000, immutable.
+func TestStaticHandler_CSS(t *testing.T) {
+	stub := &stubEngramClient{
+		statsOut: &client.Stats{Projects: []string{}},
+	}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/static/app.css", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /static/app.css, got %d (body: %s)", rr.Code, rr.Body.String())
+	}
+	ct := rr.Header().Get("Content-Type")
+	if !strings.HasPrefix(ct, "text/css") {
+		t.Errorf("expected Content-Type text/css, got %q", ct)
+	}
+	cc := rr.Header().Get("Cache-Control")
+	if cc != "public, max-age=31536000, immutable" {
+		t.Errorf("expected Cache-Control 'public, max-age=31536000, immutable', got %q", cc)
+	}
+}
+
+// TestStaticHandler_Font verifies that GET /static/fonts/GeistMono-Regular.woff2
+// returns 200, Content-Type font/woff2, and the long-cache header.
+func TestStaticHandler_Font(t *testing.T) {
+	stub := &stubEngramClient{
+		statsOut: &client.Stats{Projects: []string{}},
+	}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/static/fonts/GeistMono-Regular.woff2", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /static/fonts/GeistMono-Regular.woff2, got %d", rr.Code)
+	}
+	ct := rr.Header().Get("Content-Type")
+	if ct != "font/woff2" {
+		t.Errorf("expected Content-Type font/woff2, got %q", ct)
+	}
+	cc := rr.Header().Get("Cache-Control")
+	if cc != "public, max-age=31536000, immutable" {
+		t.Errorf("expected Cache-Control 'public, max-age=31536000, immutable', got %q", cc)
+	}
+}
+
+// TestStaticHandler_NoShadowing verifies that existing routes still return correct
+// responses after /static/* is mounted.
+func TestStaticHandler_NoShadowing(t *testing.T) {
+	stub := &stubEngramClient{
+		statsOut: &client.Stats{Projects: []string{"alpha"}},
+		recentByProject: map[string][]client.Observation{
+			"alpha": {{ID: 1, Type: "decision", Title: "Some obs", Content: "c", CreatedAt: "2026-01-01"}},
+		},
+		recentByProjectErr: map[string]error{},
+	}
+	s := newWithClient(stub)
+
+	// GET /healthz must return 200 (not shadowed by /static/*)
+	t.Run("healthz", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		rr := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Errorf("expected 200 from /healthz, got %d", rr.Code)
+		}
+		body := rr.Body.String()
+		if strings.HasPrefix(body, "font/woff2") || rr.Code == http.StatusNotFound {
+			t.Error("/healthz must not return a static file response")
+		}
+	})
+
+	// GET / must return 200
+	t.Run("home", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rr := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Errorf("expected 200 from /, got %d", rr.Code)
+		}
+	})
+
+	// GET /p/alpha must return 200 (not 404)
+	t.Run("project", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/p/alpha", nil)
+		rr := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rr, req)
+		if rr.Code == http.StatusNotFound {
+			t.Errorf("expected non-404 from /p/alpha, got %d", rr.Code)
+		}
+	})
+}
