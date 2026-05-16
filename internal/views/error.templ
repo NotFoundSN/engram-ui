@@ -4,7 +4,8 @@ templ ErrorPage(message, detail string) {
 	@Layout("Error") {
 		<section class="error-page">
 			<h1 class="error-page__title">{ message }</h1>
-			<p class="error-page__body">{ detail }</p>
+			<pre class="error-page__body">{ detail }</pre>
+			<a class="error-page__back" href="/">← back</a>
 		</section>
 	}
 }
