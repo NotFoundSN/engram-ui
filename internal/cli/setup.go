@@ -6,7 +6,13 @@ import (
 	"github.com/Gentleman-Programming/engram-ui/internal/installer"
 )
 
+// autostartName is the reserved skill name that routes to the OS autostart
+// installer rather than a regular skill install. Documented reservation:
+// if a future skill is named "autostart" it will be unreachable via setup/remove.
+const autostartName = "autostart"
+
 // Function variables for installer calls — allows test injection.
+
 var installClaudeCodeFn = func(name string) (string, error) {
 	r, err := installer.InstallClaudeCodeSkill(name)
 	return r.Destination, err
@@ -33,89 +39,124 @@ var removeAutostartFn = func() (string, error) {
 	return r.Destination, nil
 }
 
-// cmdSetup routes the setup subcommand arguments to the appropriate installer function.
-//
-// Usage:
-//
-//	engram-ui setup claude-code <skill>
-//	engram-ui setup opencode <skill>
-//	engram-ui setup os-autostart
-//	engram-ui setup remove-autostart
+var uninstallClaudeCodeFn = func(name string) (string, error) {
+	r, err := installer.UninstallClaudeCodeSkill(name)
+	if err != nil {
+		return r.Destination, err
+	}
+	if r.Action == installer.ActionNotRegistered {
+		return "", nil // sentinel: empty dest = "nothing to remove"
+	}
+	return r.Destination, nil
+}
+
+var uninstallOpenCodeFn = func(name string) (string, error) {
+	r, err := installer.UninstallOpenCodeSkill(name)
+	if err != nil {
+		return r.Destination, err
+	}
+	if r.Action == installer.ActionNotRegistered {
+		return "", nil // sentinel: empty dest = "nothing to remove"
+	}
+	return r.Destination, nil
+}
+
+// checkSkillInCatalog returns nil when name is present in the loaded catalog,
+// or a descriptive error when not found. Used by cmdSetup and cmdRemove to
+// map "unknown skill" to exit 2 (usage error) per REQ-1.7 / REQ-6.3.
+// Note: loadCatalogFn is defined in list.go and shared across this package.
+func checkSkillInCatalog(name string) error {
+	skills, err := loadCatalogFn()
+	if err != nil {
+		return err
+	}
+	for _, s := range skills {
+		if s.Name == name {
+			return nil
+		}
+	}
+	return fmt.Errorf("not found in catalog")
+}
+
+// cmdSetup implements the `setup` subcommand.
+// Usage: engram-ui setup <skill> [--tool=<claude|opencode|both>]
 func cmdSetup(args []string) int {
-	if len(args) == 0 {
-		fmt.Fprintf(stderr, "engram-ui setup: missing target\n")
-		printSetupUsage()
-		return 2
+	name, targets, usageErr, err := parseToolFlag("setup", args)
+	if err != nil {
+		fmt.Fprintf(stderr, "%v\n", err)
+		if usageErr {
+			printSetupUsage()
+			return 2
+		}
+		return 1
 	}
 
-	switch args[0] {
-	case "claude-code":
-		if len(args) < 2 {
-			fmt.Fprintf(stderr, "engram-ui setup claude-code: missing skill name\n")
-			printSetupUsage()
-			return 2
+	// autostart special case — tool flag is ignored.
+	if name == autostartName {
+		// If user passed --tool explicitly, targets will have been narrowed from
+		// default ["claude","opencode"]. We detect this by seeing if the original
+		// args contained a --tool= flag. We can infer it from targets length:
+		// default (omitted) → ["claude","opencode"] (len 2), explicit → len 1.
+		// But wait: --tool=both also gives len 2. We need a different approach.
+		// Check if any arg starts with "--tool=".
+		toolExplicit := false
+		for _, a := range args {
+			if len(a) >= 7 && a[:7] == "--tool=" {
+				toolExplicit = true
+				break
+			}
 		}
-		skill := args[1]
-		dest, err := installClaudeCodeFn(skill)
-		if err != nil {
-			fmt.Fprintf(stderr, "engram-ui setup claude-code %s: %v\n", skill, err)
-			return 1
+		if toolExplicit {
+			fmt.Fprintf(stderr, "note: --tool flag is ignored for autostart\n")
 		}
-		fmt.Fprintf(stdout, "installed: %s\n", dest)
-		return 0
-
-	case "opencode":
-		if len(args) < 2 {
-			fmt.Fprintf(stderr, "engram-ui setup opencode: missing skill name\n")
-			printSetupUsage()
-			return 2
-		}
-		skill := args[1]
-		dest, err := installOpenCodeFn(skill)
-		if err != nil {
-			fmt.Fprintf(stderr, "engram-ui setup opencode %s: %v\n", skill, err)
-			return 1
-		}
-		fmt.Fprintf(stdout, "installed: %s\n", dest)
-		return 0
-
-	case "os-autostart":
 		dest, err := installAutostartFn()
 		if err != nil {
-			fmt.Fprintf(stderr, "engram-ui setup os-autostart: %v\n", err)
+			fmt.Fprintf(stderr, "engram-ui setup autostart: %v\n", err)
 			return 1
 		}
-		fmt.Fprintf(stdout, "registered: %s\n", dest)
+		fmt.Fprintf(stderr, "registered: %s\n", dest)
 		return 0
+	}
 
-	case "remove-autostart":
-		dest, err := removeAutostartFn()
-		if err != nil {
-			fmt.Fprintf(stderr, "engram-ui setup remove-autostart: %v\n", err)
-			return 1
-		}
-		if dest == "" {
-			fmt.Fprintln(stdout, "not currently registered (nothing to remove)")
-		} else {
-			fmt.Fprintf(stdout, "removed: %s\n", dest)
-		}
-		return 0
-
-	default:
-		fmt.Fprintf(stderr, "engram-ui setup: unknown target %q\n", args[0])
-		printSetupUsage()
+	// Validate skill exists in catalog before attempting install.
+	if err := checkSkillInCatalog(name); err != nil {
+		fmt.Fprintf(stderr, "engram-ui setup: unknown skill %q — %v\n", name, err)
 		return 2
 	}
+
+	// Regular skill path — iterate legs, no fail-fast.
+	failed := false
+	for _, leg := range targets {
+		var dest string
+		var legErr error
+		switch leg {
+		case "claude":
+			dest, legErr = installClaudeCodeFn(name)
+		case "opencode":
+			dest, legErr = installOpenCodeFn(name)
+		}
+		if legErr != nil {
+			fmt.Fprintf(stderr, "engram-ui setup %s [%s]: %v\n", name, leg, legErr)
+			failed = true
+			continue
+		}
+		fmt.Fprintf(stderr, "installed [%s]: %s\n", leg, dest)
+	}
+
+	if failed {
+		return 1
+	}
+	return 0
 }
 
 func printSetupUsage() {
-	fmt.Fprintln(stderr, `Usage: engram-ui setup <target> [args]
+	fmt.Fprintln(stderr, `Usage: engram-ui setup <skill> [--tool=<claude|opencode|both>]
 
-Targets:
-  claude-code <skill>    install the named skill for Claude Code
-  opencode <skill>       install the named skill for OpenCode
-  os-autostart           register engram-ui as an OS autostart entry
-  remove-autostart       remove the OS autostart entry
+Arguments:
+  <skill>              name of the skill to install (or "autostart")
 
-Available skills are discovered via the embedded catalog.`)
+Options:
+  --tool=<value>       target tool: claude, opencode, or both (default: both)
+
+The --tool flag is ignored when skill is "autostart".`)
 }

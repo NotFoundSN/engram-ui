@@ -45,6 +45,10 @@ func Dispatch(args []string) int {
 		return cmdServe(args[1:])
 	case "setup":
 		return cmdSetup(args[1:])
+	case "remove":
+		return cmdRemove(args[1:])
+	case "list":
+		return cmdList(args[1:])
 	case "version", "--version", "-v":
 		return cmdVersion()
 	case "help", "--help", "-h":
@@ -78,20 +82,22 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, `engram-ui — web viewer for engram persistent memory
 
 Usage:
-  engram-ui                    launch interactive installer TUI (default)
-  engram-ui serve [flags]      start the web UI daemon
-  engram-ui setup <target>     install skills or configure OS autostart
-  engram-ui version            print version and exit
-  engram-ui help               print this help
+  engram-ui                              launch interactive installer TUI (default)
+  engram-ui serve [flags]                start the web UI daemon
+  engram-ui setup <skill> [--tool=...]   install a skill for one or both tools
+  engram-ui remove <skill> [--tool=...]  remove a skill from one or both tools
+  engram-ui list [--json]                list available skills
+  engram-ui version                      print version and exit
+  engram-ui help                         print this help
 
 Serve flags:
   --engram=<url>     engram REST API base URL (default: http://localhost:7437)
   --listen=<addr>    address engram-ui listens on (default: :7438)
   --no-spawn         fail instead of auto-spawning 'engram serve'
 
-Setup targets:
-  claude-code <skill>    install the named skill for Claude Code
-  opencode <skill>       install the named skill for OpenCode
-  os-autostart           register engram-ui as an OS autostart entry
-  remove-autostart       remove the OS autostart entry`)
+Setup / Remove flags:
+  --tool=<claude|opencode|both>   target tool (default: both)
+
+Note: "autostart" is a reserved skill name that invokes OS autostart registration.
+  --tool is ignored for autostart.`)
 }

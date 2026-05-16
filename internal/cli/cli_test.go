@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/Gentleman-Programming/engram-ui/internal/installer"
 )
 
 func TestDispatch_NoArgs_TTY_LaunchesTUI(t *testing.T) {
@@ -149,6 +151,91 @@ func TestDispatch_UnknownSubcommand(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "foo") || !strings.Contains(buf.String(), "unknown") {
 		t.Errorf("Dispatch([foo]) stderr %q should mention unknown subcommand", buf.String())
+	}
+}
+
+func TestDispatch_Setup_RoutesToCmdSetup(t *testing.T) {
+	// "setup" with a valid skill routes to cmdSetup.
+	// Stub catalog + install fns to avoid real FS calls.
+	origCatalog := loadCatalogFn
+	defer func() { loadCatalogFn = origCatalog }()
+	loadCatalogFn = func() ([]installer.Skill, error) {
+		return []installer.Skill{{Name: "brainstorm", Description: "test"}}, nil
+	}
+
+	origClaude := installClaudeCodeFn
+	origOpen := installOpenCodeFn
+	defer func() { installClaudeCodeFn = origClaude; installOpenCodeFn = origOpen }()
+	installClaudeCodeFn = func(n string) (string, error) { return "/fake/claude/" + n, nil }
+	installOpenCodeFn = func(n string) (string, error) { return "/fake/open/" + n, nil }
+
+	var outBuf bytes.Buffer
+	origOut := stdout
+	stdout = &outBuf
+	defer func() { stdout = origOut }()
+
+	code := Dispatch([]string{"setup", "brainstorm"})
+	if code != 0 {
+		t.Errorf("Dispatch([setup brainstorm]) = %d, want 0", code)
+	}
+}
+
+func TestDispatch_Remove_RoutesToCmdRemove(t *testing.T) {
+	// "remove" routes to cmdRemove — use stubs to avoid real FS ops.
+	origClaude := uninstallClaudeCodeFn
+	origOpen := uninstallOpenCodeFn
+	defer func() { uninstallClaudeCodeFn = origClaude; uninstallOpenCodeFn = origOpen }()
+	uninstallClaudeCodeFn = func(n string) (string, error) { return "/fake/claude/" + n, nil }
+	uninstallOpenCodeFn = func(n string) (string, error) { return "/fake/open/" + n, nil }
+
+	var outBuf bytes.Buffer
+	origOut := stdout
+	stdout = &outBuf
+	defer func() { stdout = origOut }()
+
+	code := Dispatch([]string{"remove", "brainstorm"})
+	if code != 0 {
+		t.Errorf("Dispatch([remove brainstorm]) = %d, want 0", code)
+	}
+}
+
+func TestDispatch_List_RoutesToCmdList(t *testing.T) {
+	// "list" routes to cmdList — stub catalog to avoid real FS.
+	origCatalog := loadCatalogFn
+	defer func() { loadCatalogFn = origCatalog }()
+	loadCatalogFn = func() ([]installer.Skill, error) {
+		return []installer.Skill{{Name: "brainstorm", Description: "test"}}, nil
+	}
+
+	var outBuf bytes.Buffer
+	origOut := stdout
+	stdout = &outBuf
+	defer func() { stdout = origOut }()
+
+	code := Dispatch([]string{"list"})
+	if code != 0 {
+		t.Errorf("Dispatch([list]) = %d, want 0", code)
+	}
+	if !strings.Contains(outBuf.String(), "brainstorm") {
+		t.Errorf("Dispatch([list]) output missing skill, got: %q", outBuf.String())
+	}
+}
+
+func TestDispatch_PrintUsage_MentionsNewVerbs(t *testing.T) {
+	var outBuf bytes.Buffer
+	origOut := stdout
+	stdout = &outBuf
+	defer func() { stdout = origOut }()
+
+	code := Dispatch([]string{"help"})
+	if code != 0 {
+		t.Errorf("Dispatch([help]) = %d, want 0", code)
+	}
+	out := outBuf.String()
+	for _, verb := range []string{"setup", "remove", "list"} {
+		if !strings.Contains(out, verb) {
+			t.Errorf("Dispatch([help]) output missing verb %q", verb)
+		}
 	}
 }
 

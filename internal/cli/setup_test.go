@@ -2,220 +2,349 @@ package cli
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/Gentleman-Programming/engram-ui/internal/installer"
 )
 
-func TestCmdSetup_NoArgs(t *testing.T) {
-	var buf bytes.Buffer
-	origStderr := stderr
-	stderr = &buf
-	defer func() { stderr = origStderr }()
+// defaultTestSkills is the catalog stub used by setupSeam so tests don't hit
+// the real embedded FS and "brainstorm" is always a known skill.
+var defaultTestSkills = []installer.Skill{
+	{Name: "brainstorm", Description: "test brainstorm"},
+	{Name: "debug", Description: "test debug"},
+}
 
-	code := cmdSetup([]string{})
+// setupSeam saves/restores stdout, stderr, catalog, and all install/remove fn vars.
+func setupSeam(outBuf, errBuf *bytes.Buffer,
+	claudeFn func(string) (string, error),
+	openFn func(string) (string, error),
+	autostartFn func() (string, error),
+	fn func(),
+) {
+	origOut, origErr := stdout, stderr
+	stdout, stderr = outBuf, errBuf
+
+	origClaude := installClaudeCodeFn
+	origOpen := installOpenCodeFn
+	origAutostart := installAutostartFn
+	origCatalog := loadCatalogFn
+
+	// Stub catalog so every test with a valid skill name passes catalog check.
+	loadCatalogFn = func() ([]installer.Skill, error) { return defaultTestSkills, nil }
+
+	if claudeFn != nil {
+		installClaudeCodeFn = claudeFn
+	}
+	if openFn != nil {
+		installOpenCodeFn = openFn
+	}
+	if autostartFn != nil {
+		installAutostartFn = autostartFn
+	}
+
+	defer func() {
+		stdout, stderr = origOut, origErr
+		installClaudeCodeFn = origClaude
+		installOpenCodeFn = origOpen
+		installAutostartFn = origAutostart
+		loadCatalogFn = origCatalog
+	}()
+
+	fn()
+}
+
+// --- SCN-01: Happy path — setup both tools (default) ---
+
+func TestCmdSetup_BothTools_Default(t *testing.T) {
+	var outBuf, errBuf bytes.Buffer
+	var claudeCalled, openCalled bool
+
+	setupSeam(&outBuf, &errBuf,
+		func(n string) (string, error) { claudeCalled = true; return "/fake/claude/brainstorm", nil },
+		func(n string) (string, error) { openCalled = true; return "/fake/opencode/brainstorm", nil },
+		nil,
+		func() {
+			code := cmdSetup([]string{"brainstorm"})
+			if code != 0 {
+				t.Errorf("cmdSetup([brainstorm]) = %d, want 0", code)
+			}
+		},
+	)
+
+	if !claudeCalled {
+		t.Error("installClaudeCodeFn not called")
+	}
+	if !openCalled {
+		t.Error("installOpenCodeFn not called")
+	}
+	if outBuf.Len() != 0 {
+		t.Errorf("stdout should be empty (success goes to stderr), got: %q", outBuf.String())
+	}
+	// Both legs should print [leg] prefix on stderr (REQ-1.5 / REQ-2.5).
+	errOut := errBuf.String()
+	if !strings.Contains(errOut, "[claude]") {
+		t.Errorf("stderr missing [claude] prefix, got: %q", errOut)
+	}
+	if !strings.Contains(errOut, "[opencode]") {
+		t.Errorf("stderr missing [opencode] prefix, got: %q", errOut)
+	}
+}
+
+// --- SCN-02: Setup single tool — claude ---
+
+func TestCmdSetup_ToolClaude(t *testing.T) {
+	var outBuf, errBuf bytes.Buffer
+	var claudeCalled, openCalled bool
+
+	setupSeam(&outBuf, &errBuf,
+		func(n string) (string, error) { claudeCalled = true; return "/fake/claude/brainstorm", nil },
+		func(n string) (string, error) { openCalled = true; return "/fake/opencode/brainstorm", nil },
+		nil,
+		func() {
+			code := cmdSetup([]string{"brainstorm", "--tool=claude"})
+			if code != 0 {
+				t.Errorf("cmdSetup([brainstorm --tool=claude]) = %d, want 0", code)
+			}
+		},
+	)
+
+	if !claudeCalled {
+		t.Error("installClaudeCodeFn should have been called")
+	}
+	if openCalled {
+		t.Error("installOpenCodeFn should NOT have been called for --tool=claude")
+	}
+	if !strings.Contains(errBuf.String(), "[claude]") {
+		t.Errorf("stderr should contain [claude] prefix (REQ-1.5), got: %q", errBuf.String())
+	}
+}
+
+// --- SCN-03: Setup single tool — opencode ---
+
+func TestCmdSetup_ToolOpenCode(t *testing.T) {
+	var outBuf, errBuf bytes.Buffer
+	var claudeCalled, openCalled bool
+
+	setupSeam(&outBuf, &errBuf,
+		func(n string) (string, error) { claudeCalled = true; return "/fake/claude/brainstorm", nil },
+		func(n string) (string, error) { openCalled = true; return "/fake/opencode/brainstorm", nil },
+		nil,
+		func() {
+			code := cmdSetup([]string{"brainstorm", "--tool=opencode"})
+			if code != 0 {
+				t.Errorf("cmdSetup([brainstorm --tool=opencode]) = %d, want 0", code)
+			}
+		},
+	)
+
+	if claudeCalled {
+		t.Error("installClaudeCodeFn should NOT have been called for --tool=opencode")
+	}
+	if !openCalled {
+		t.Error("installOpenCodeFn should have been called")
+	}
+	if !strings.Contains(errBuf.String(), "[opencode]") {
+		t.Errorf("stderr should contain [opencode] prefix (REQ-2.5), got: %q", errBuf.String())
+	}
+}
+
+// --- SCN-06: Setup autostart — no tool flag ---
+
+func TestCmdSetup_Autostart_NoToolFlag(t *testing.T) {
+	var outBuf, errBuf bytes.Buffer
+	var autostartCalled bool
+	var claudeCalled, openCalled bool
+
+	origAutostart := installAutostartFn
+	origClaude := installClaudeCodeFn
+	origOpen := installOpenCodeFn
+	installAutostartFn = func() (string, error) { autostartCalled = true; return "/fake/autostart", nil }
+	installClaudeCodeFn = func(n string) (string, error) { claudeCalled = true; return "", nil }
+	installOpenCodeFn = func(n string) (string, error) { openCalled = true; return "", nil }
+	origOut, origErr := stdout, stderr
+	stdout, stderr = &outBuf, &errBuf
+	defer func() {
+		installAutostartFn = origAutostart
+		installClaudeCodeFn = origClaude
+		installOpenCodeFn = origOpen
+		stdout, stderr = origOut, origErr
+	}()
+
+	code := cmdSetup([]string{"autostart"})
+	if code != 0 {
+		t.Errorf("cmdSetup([autostart]) = %d, want 0", code)
+	}
+	if !autostartCalled {
+		t.Error("installAutostartFn should have been called")
+	}
+	if claudeCalled {
+		t.Error("installClaudeCodeFn should NOT be called for autostart")
+	}
+	if openCalled {
+		t.Error("installOpenCodeFn should NOT be called for autostart")
+	}
+	// No --tool note on stderr (flag not present), but "registered:" success goes to stderr (REQ-7.4).
+	if !strings.Contains(errBuf.String(), "registered") {
+		t.Errorf("stderr should contain autostart success message, got: %q", errBuf.String())
+	}
+	if outBuf.Len() != 0 {
+		t.Errorf("stdout should be empty for autostart, got: %q", outBuf.String())
+	}
+}
+
+// --- SCN-07: Setup autostart — tool flag present (note + proceed) ---
+
+func TestCmdSetup_Autostart_WithToolFlag_NoteAndProceed(t *testing.T) {
+	var outBuf, errBuf bytes.Buffer
+	var autostartCalled bool
+
+	origAutostart := installAutostartFn
+	origOut, origErr := stdout, stderr
+	installAutostartFn = func() (string, error) { autostartCalled = true; return "/fake/autostart", nil }
+	stdout, stderr = &outBuf, &errBuf
+	defer func() {
+		installAutostartFn = origAutostart
+		stdout, stderr = origOut, origErr
+	}()
+
+	code := cmdSetup([]string{"autostart", "--tool=claude"})
+	if code != 0 {
+		t.Errorf("cmdSetup([autostart --tool=claude]) = %d, want 0", code)
+	}
+	if !autostartCalled {
+		t.Error("installAutostartFn should have been called")
+	}
+	// stderr must contain the note about --tool being ignored.
+	if !strings.Contains(errBuf.String(), "--tool") || !strings.Contains(errBuf.String(), "ignored") {
+		t.Errorf("stderr should contain --tool ignored note, got: %q", errBuf.String())
+	}
+}
+
+// --- SCN-10: Setup unknown skill — exit 2 ---
+
+func TestCmdSetup_UnknownSkill_Exit2(t *testing.T) {
+	var outBuf, errBuf bytes.Buffer
+
+	origOut, origErr := stdout, stderr
+	stdout, stderr = &outBuf, &errBuf
+	origCatalog := loadCatalogFn
+	// Catalog does NOT contain "nonexistent".
+	loadCatalogFn = func() ([]installer.Skill, error) {
+		return []installer.Skill{{Name: "brainstorm", Description: "test"}}, nil
+	}
+	defer func() {
+		stdout, stderr = origOut, origErr
+		loadCatalogFn = origCatalog
+	}()
+
+	code := cmdSetup([]string{"nonexistent"})
 	if code != 2 {
-		t.Errorf("cmdSetup([]) = %d, want 2", code)
+		t.Errorf("cmdSetup([nonexistent]) = %d, want 2 (usage error for unknown skill)", code)
+	}
+
+	if !strings.Contains(errBuf.String(), "nonexistent") {
+		t.Errorf("stderr should identify unknown skill, got: %q", errBuf.String())
 	}
 }
 
-func TestCmdSetup_UnknownTarget(t *testing.T) {
-	var buf bytes.Buffer
-	origStderr := stderr
-	stderr = &buf
-	defer func() { stderr = origStderr }()
+// --- SCN-13: Partial failure — one leg fails → exit 1 ---
 
-	code := cmdSetup([]string{"foo"})
-	if code != 2 {
-		t.Errorf("cmdSetup([foo]) = %d, want 2", code)
-	}
-	if !strings.Contains(buf.String(), "unknown") {
-		t.Errorf("cmdSetup([foo]) stderr %q should mention 'unknown'", buf.String())
-	}
-}
+func TestCmdSetup_PartialFailure_BothTools_Exit1(t *testing.T) {
+	var outBuf, errBuf bytes.Buffer
 
-func TestCmdSetup_ClaudeCode_MissingSkill(t *testing.T) {
-	var buf bytes.Buffer
-	origStderr := stderr
-	stderr = &buf
-	defer func() { stderr = origStderr }()
+	setupSeam(&outBuf, &errBuf,
+		func(n string) (string, error) { return "/fake/claude/brainstorm", nil },
+		func(n string) (string, error) { return "", errors.New("permission denied") },
+		nil,
+		func() {
+			code := cmdSetup([]string{"brainstorm", "--tool=both"})
+			if code != 1 {
+				t.Errorf("cmdSetup([brainstorm --tool=both] partial failure) = %d, want 1", code)
+			}
+		},
+	)
 
-	code := cmdSetup([]string{"claude-code"})
-	if code != 2 {
-		t.Errorf("cmdSetup([claude-code]) without skill = %d, want 2", code)
+	// Success goes to stderr (REQ-1.5), error also on stderr.
+	if !strings.Contains(errBuf.String(), "[claude]") {
+		t.Errorf("stderr should contain [claude] success line (REQ-1.5), got: %q", errBuf.String())
 	}
-	if !strings.Contains(buf.String(), "missing skill name") {
-		t.Errorf("expected 'missing skill name' in stderr, got: %q", buf.String())
+	if !strings.Contains(errBuf.String(), "[opencode]") || !strings.Contains(errBuf.String(), "permission denied") {
+		t.Errorf("stderr should contain [opencode] error, got: %q", errBuf.String())
 	}
 }
 
-func TestCmdSetup_ClaudeCode(t *testing.T) {
-	origInstallClaude := installClaudeCodeFn
-	defer func() { installClaudeCodeFn = origInstallClaude }()
+// --- SCN-14: Setup — missing skill argument — exit 2 ---
 
-	var calledWith string
-	installClaudeCodeFn = func(name string) (string, error) {
-		calledWith = name
-		return "/fake/.claude/skills/" + name, nil
-	}
+func TestCmdSetup_MissingSkill_Exit2(t *testing.T) {
+	var outBuf, errBuf bytes.Buffer
 
-	var buf bytes.Buffer
-	origStdout := stdout
-	stdout = &buf
-	defer func() { stdout = origStdout }()
+	setupSeam(&outBuf, &errBuf, nil, nil, nil, func() {
+		code := cmdSetup([]string{})
+		if code != 2 {
+			t.Errorf("cmdSetup([]) = %d, want 2", code)
+		}
+	})
 
-	code := cmdSetup([]string{"claude-code", "brainstorm"})
-	if code != 0 {
-		t.Errorf("cmdSetup([claude-code brainstorm]) = %d, want 0", code)
-	}
-	if calledWith != "brainstorm" {
-		t.Errorf("installClaudeCodeFn called with %q, want %q", calledWith, "brainstorm")
-	}
-	if !strings.Contains(buf.String(), "/fake/.claude/skills/brainstorm") {
-		t.Errorf("cmdSetup stdout %q should contain destination path", buf.String())
+	if errBuf.Len() == 0 {
+		t.Error("stderr should contain usage error")
 	}
 }
 
-func TestCmdSetup_OpenCode_MissingSkill(t *testing.T) {
-	var buf bytes.Buffer
-	origStderr := stderr
-	stderr = &buf
-	defer func() { stderr = origStderr }()
+// --- Invalid --tool value — exit 2 (SCN-11) ---
 
-	code := cmdSetup([]string{"opencode"})
-	if code != 2 {
-		t.Errorf("cmdSetup([opencode]) without skill = %d, want 2", code)
+func TestCmdSetup_InvalidToolValue_Exit2(t *testing.T) {
+	var outBuf, errBuf bytes.Buffer
+
+	setupSeam(&outBuf, &errBuf, nil, nil, nil, func() {
+		code := cmdSetup([]string{"brainstorm", "--tool=foo"})
+		if code != 2 {
+			t.Errorf("cmdSetup([brainstorm --tool=foo]) = %d, want 2", code)
+		}
+	})
+
+	if !strings.Contains(errBuf.String(), "foo") {
+		t.Errorf("stderr should mention invalid tool value, got: %q", errBuf.String())
 	}
 }
 
-func TestCmdSetup_OpenCode(t *testing.T) {
-	origInstallOpenCode := installOpenCodeFn
-	defer func() { installOpenCodeFn = origInstallOpenCode }()
+// --- Empty --tool value — exit 2 (SCN-12) ---
 
-	var calledWith string
-	installOpenCodeFn = func(name string) (string, error) {
-		calledWith = name
-		return "/fake/.config/opencode/skills/" + name, nil
-	}
+func TestCmdSetup_EmptyToolValue_Exit2(t *testing.T) {
+	var outBuf, errBuf bytes.Buffer
 
-	var buf bytes.Buffer
-	origStdout := stdout
-	stdout = &buf
-	defer func() { stdout = origStdout }()
+	setupSeam(&outBuf, &errBuf, nil, nil, nil, func() {
+		code := cmdSetup([]string{"brainstorm", "--tool="})
+		if code != 2 {
+			t.Errorf("cmdSetup([brainstorm --tool=]) = %d, want 2", code)
+		}
+	})
 
-	code := cmdSetup([]string{"opencode", "brainstorm"})
-	if code != 0 {
-		t.Errorf("cmdSetup([opencode brainstorm]) = %d, want 0", code)
-	}
-	if calledWith != "brainstorm" {
-		t.Errorf("installOpenCodeFn called with %q, want %q", calledWith, "brainstorm")
+	if errBuf.Len() == 0 {
+		t.Error("stderr should contain usage error")
 	}
 }
 
-func TestCmdSetup_OsAutostart(t *testing.T) {
-	origInstallAutostart := installAutostartFn
-	defer func() { installAutostartFn = origInstallAutostart }()
+// --- Per-leg [leg] prefix — also for single-leg ---
 
-	called := false
-	installAutostartFn = func() (string, error) {
-		called = true
-		return "/fake/startup/engram-ui.bat", nil
-	}
+func TestCmdSetup_LegPrefix_SingleLeg(t *testing.T) {
+	var outBuf, errBuf bytes.Buffer
 
-	var buf bytes.Buffer
-	origStdout := stdout
-	stdout = &buf
-	defer func() { stdout = origStdout }()
+	setupSeam(&outBuf, &errBuf,
+		func(n string) (string, error) { return "/fake/claude/" + n, nil },
+		nil,
+		nil,
+		func() {
+			code := cmdSetup([]string{"brainstorm", "--tool=claude"})
+			if code != 0 {
+				t.Errorf("code = %d, want 0", code)
+			}
+		},
+	)
 
-	code := cmdSetup([]string{"os-autostart"})
-	if code != 0 {
-		t.Errorf("cmdSetup([os-autostart]) = %d, want 0", code)
-	}
-	if !called {
-		t.Error("cmdSetup([os-autostart]): installAutostartFn not called")
-	}
-}
-
-func TestCmdSetup_ClaudeCode_Error(t *testing.T) {
-	origInstallClaude := installClaudeCodeFn
-	defer func() { installClaudeCodeFn = origInstallClaude }()
-
-	installClaudeCodeFn = func(name string) (string, error) {
-		return "", fmt.Errorf("permission denied")
-	}
-
-	var buf bytes.Buffer
-	origStderr := stderr
-	stderr = &buf
-	defer func() { stderr = origStderr }()
-
-	code := cmdSetup([]string{"claude-code", "brainstorm"})
-	if code != 1 {
-		t.Errorf("cmdSetup([claude-code brainstorm] with error) = %d, want 1", code)
-	}
-}
-
-func TestCmdSetup_OsAutostart_Error(t *testing.T) {
-	origInstallAutostart := installAutostartFn
-	defer func() { installAutostartFn = origInstallAutostart }()
-
-	installAutostartFn = func() (string, error) {
-		return "", fmt.Errorf("unsupported platform")
-	}
-
-	var buf bytes.Buffer
-	origStderr := stderr
-	stderr = &buf
-	defer func() { stderr = origStderr }()
-
-	code := cmdSetup([]string{"os-autostart"})
-	if code != 1 {
-		t.Errorf("cmdSetup([os-autostart] with error) = %d, want 1", code)
-	}
-}
-
-func TestCmdSetup_RemoveAutostart_NotRegistered(t *testing.T) {
-	origRemoveAutostart := removeAutostartFn
-	defer func() { removeAutostartFn = origRemoveAutostart }()
-
-	removeAutostartFn = func() (string, error) {
-		return "", nil
-	}
-
-	var buf bytes.Buffer
-	origStdout := stdout
-	stdout = &buf
-	defer func() { stdout = origStdout }()
-
-	code := cmdSetup([]string{"remove-autostart"})
-	if code != 0 {
-		t.Errorf("cmdSetup([remove-autostart] not-registered) = %d, want 0", code)
-	}
-	if !strings.Contains(buf.String(), "not currently registered") {
-		t.Errorf("expected 'not currently registered' in output, got: %q", buf.String())
-	}
-}
-
-func TestCmdSetup_RemoveAutostart(t *testing.T) {
-	origRemoveAutostart := removeAutostartFn
-	defer func() { removeAutostartFn = origRemoveAutostart }()
-
-	called := false
-	removeAutostartFn = func() (string, error) {
-		called = true
-		return "removed", nil
-	}
-
-	var buf bytes.Buffer
-	origStdout := stdout
-	stdout = &buf
-	defer func() { stdout = origStdout }()
-
-	code := cmdSetup([]string{"remove-autostart"})
-	if code != 0 {
-		t.Errorf("cmdSetup([remove-autostart]) = %d, want 0", code)
-	}
-	if !called {
-		t.Error("cmdSetup([remove-autostart]): removeAutostartFn not called")
+	errOut := errBuf.String()
+	if !strings.Contains(errOut, "[claude]") {
+		t.Errorf("single-leg stderr should contain [claude] prefix (REQ-1.5), got: %q", errOut)
 	}
 }
