@@ -106,10 +106,10 @@
   --eg-muted:           #737373;
   --eg-faint:           #404040;
 
-  /* Color — accent (emerald #22c55e in v1) */
-  --eg-accent:          #22c55e;
-  --eg-accent-soft:     rgba(34, 197, 94, 0.12);
-  --eg-accent-strong:   #4ade80;
+  /* Color — accent (cyan, matches template aesthetic) */
+  --eg-accent:          #22d3ee;
+  --eg-accent-soft:     rgba(34, 211, 238, 0.12);
+  --eg-accent-strong:   #67e8f9;
 
   /* Color — semantic */
   --eg-danger:          #ef4444;
