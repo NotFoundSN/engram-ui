@@ -138,7 +138,7 @@ mem_save({
 ### `design`
 
 **Use when**: documenting technical approach and per-feature architecture
-decisions. The output of `sdd-design` or `superpowers:brainstorming`.
+decisions. The output of `sdd-design`.
 
 **Don't use when**: the decision is system-wide and involves explicit tradeoffs
 across multiple domains — use `architecture` for that.
@@ -173,7 +173,7 @@ mem_save({
 ### `plan`
 
 **Use when**: recording an implementation roadmap — steps, order, dependencies.
-The output of `superpowers:writing-plans`.
+Use for any structured plan written before coding begins.
 
 **Don't use when**: recording the task checklist itself — use `tasks` for that.
 
@@ -196,7 +196,7 @@ The output of `superpowers:writing-plans`.
 mem_save({
   "title": "Plan: auth refactor implementation",
   "type": "plan",
-  "topic_key": "superpowers/auth-refactor/plan",
+  "topic_key": "sdd/auth-refactor/plan",
   "project": "myapp",
   "content": "## Steps\n1. Add JWT library\n2. Implement token issuance endpoint\n3. Implement refresh endpoint\n4. Update middleware\n5. Write integration tests\n\n## Order\nMiddleware last — depends on issuance being complete.\n\n## Validation\nIntegration test suite passes. Existing session tests updated."
 })
@@ -549,8 +549,8 @@ mem_save({
 When unsure which type to use, follow this tree:
 
 ```
-Is this the OUTPUT of a workflow phase (SDD or Superpowers)?
-  → Yes: use the workflow mapping in workflows/sdd.md or workflows/superpowers.md
+Is this the OUTPUT of an SDD workflow phase?
+  → Yes: use the workflow mapping in workflows/sdd.md
   → No: continue
 
 Is this something you FOUND (not decided, not fixed)?

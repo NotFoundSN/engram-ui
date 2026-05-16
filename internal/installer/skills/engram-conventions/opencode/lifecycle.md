@@ -152,11 +152,6 @@ needs to produce a `.md` file for a legitimate reason (publication,
 external sharing, the user explicitly asked for a file), that remains
 valid.
 
-**Carve-out — Superpowers**: the upstream `brainstorming` and
-`writing-plans` Superpowers skills write `.md` files as part of their
-behavior. See `workflows/superpowers.md` for the conditional rule (dual
-save when Superpowers, engram-only otherwise).
-
 ---
 
 ## Session Lifecycle

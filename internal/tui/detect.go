@@ -31,7 +31,7 @@ import (
 func DetectState(item Item, home, xdg string) State {
 	switch {
 	case item.ID == "autostart":
-		return detectAutostart()
+		return detectAutostart(home, xdg)
 	case strings.HasPrefix(item.ID, "skill:") && strings.HasSuffix(item.ID, ":claude"):
 		return detectClaudeSkill(home, item.SkillName)
 	case strings.HasPrefix(item.ID, "skill:") && strings.HasSuffix(item.ID, ":opencode"):
@@ -41,13 +41,9 @@ func DetectState(item Item, home, xdg string) State {
 	}
 }
 
-func detectAutostart() State {
+func detectAutostart(home, xdg string) State {
+	// APPDATA still comes from env — Windows tests must override via t.Setenv.
 	appData := os.Getenv("APPDATA")
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return StateNotInstalled
-	}
-	xdg := os.Getenv("XDG_CONFIG_HOME")
 
 	// Check each per-OS candidate path; if any exists, autostart is installed.
 	candidates := []string{}

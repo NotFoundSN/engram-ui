@@ -136,9 +136,9 @@ mem_save({
 
 ## Ad-hoc vs Workflow Output
 
-If a save is the output of an SDD or Superpowers phase, use the workflow
-namespace (`sdd/`, `superpowers/`). If it is a standalone save made during
-implementation without a governing workflow, use the ad-hoc namespaces above.
+If a save is the output of an SDD phase, use the workflow namespace
+(`sdd/`). If it is a standalone save made during implementation without a
+governing workflow, use the ad-hoc namespaces above.
 
 **Do not mix namespaces for the same artifact.** An architecture decision
 reached during an SDD design phase belongs in `sdd/<change>/design`, not in
@@ -148,7 +148,6 @@ record may be saved separately under `architecture/<area>`.
 | Save context | Namespace |
 |--------------|-----------|
 | Output of `sdd-design` phase | `sdd/<change>/design` |
-| Output of `brainstorming` skill | `superpowers/<feature>/design` |
 | Standalone decision during implementation | `decision/<short-id>` |
 | Permanent cross-cutting architecture record | `architecture/<area>` |
 

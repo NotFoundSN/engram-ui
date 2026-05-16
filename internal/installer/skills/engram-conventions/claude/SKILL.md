@@ -6,7 +6,7 @@ description: >
   mem_session_summary, mem_judge, mem_update, or any engram tool. Covers
   observation type taxonomy, topic_key namespacing, multi-repo setup via
   .engram/config.json, session lifecycle, conflict resolution, and workflow
-  cookbooks for SDD, Superpowers, and ad-hoc saves.
+  cookbooks for SDD and ad-hoc saves.
 triggers:
   - mem_save
   - mem_search
@@ -25,7 +25,7 @@ triggers:
 Portable, opinionated guidance on top of engram's open schema. Defines a
 canonical taxonomy of 14 observation types, a `<namespace>/<feature>[/<phase>]`
 convention for `topic_key`, multi-repo handling, full lifecycle operations, and
-per-workflow cookbooks for SDD, Superpowers, and ad-hoc saves.
+per-workflow cookbooks for SDD and ad-hoc saves.
 
 Zero changes to engram's HTTP API or MCP server. Discipline lives in this skill,
 not in the API.
@@ -63,7 +63,6 @@ not in the API.
 | Resolving a conflict (`mem_judge`) | `lifecycle.md` |
 | Updating an existing observation | `lifecycle.md` |
 | Saving output from an SDD phase | `workflows/sdd.md` |
-| Saving output from a Superpowers skill | `workflows/superpowers.md` |
 | Saving a decision, bugfix, discovery, pattern, config, or preference | `workflows/ad-hoc.md` |
 | Surfacing a saved memory's URL to the user | `lifecycle.md#surfacing-memories-to-the-user-via-url` |
 | Choosing between a `.md` file and an engram save | `lifecycle.md#when-to-use-engram-vs-a-standalone-md-file` |

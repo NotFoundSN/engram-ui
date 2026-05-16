@@ -112,7 +112,6 @@ func TestInstallClaudeCodeSkill_EngramConventions_MultiFile(t *testing.T) {
 		"multi-repo.md",
 		filepath.Join("workflows", "sdd.md"),
 		filepath.Join("workflows", "ad-hoc.md"),
-		filepath.Join("workflows", "superpowers.md"),
 	}
 	for _, rel := range wantPaths {
 		p := filepath.Join(expectedDir, rel)

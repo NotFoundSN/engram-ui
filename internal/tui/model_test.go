@@ -9,7 +9,9 @@ import (
 )
 
 // newTestModel returns a Model rooted at a tmp home so tests do not touch
-// the developer's real home dir.
+// the developer's real home dir. APPDATA is also pointed at a subdir of
+// tmp so detectAutostart() does not see the developer's real Windows
+// autostart entry (if any).
 func newTestModel(t *testing.T) (Model, string) {
 	t.Helper()
 	tmp := t.TempDir()
@@ -19,6 +21,7 @@ func newTestModel(t *testing.T) (Model, string) {
 	if err := os.MkdirAll(filepath.Join(tmp, ".config", "opencode"), 0o755); err != nil {
 		t.Fatalf("mkdir opencode: %v", err)
 	}
+	t.Setenv("APPDATA", filepath.Join(tmp, "AppData"))
 	return NewModel(tmp, ""), tmp
 }
 

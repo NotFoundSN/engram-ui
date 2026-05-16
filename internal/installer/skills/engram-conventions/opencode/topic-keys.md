@@ -37,7 +37,6 @@ observations queryable and upsert-able under the same identifier.
 |-----------|---------|---------------|
 | `sdd/<change>/<phase>` | SDD workflow artifacts | `workflows/sdd.md` |
 | `sdd-init/<project>` | SDD project context (test command, conventions, stack) | `workflows/sdd.md` |
-| `superpowers/<feature>/<phase>` | Superpowers skill outputs | `workflows/superpowers.md` |
 | `architecture/<area>` | Standalone architectural decisions | `workflows/ad-hoc.md` |
 | `decision/<short-id>` | Standalone tactical decisions | `workflows/ad-hoc.md` |
 | `bugfix/<short-id>` | Bug fixes | `workflows/ad-hoc.md` |
@@ -55,7 +54,7 @@ For multi-repo products, the repo identifier is used as the leading slot. See `m
 **Good:**
 ```
 sdd/auth-refactor/spec
-superpowers/payment-flow/plan
+sdd/payment-flow/plan
 architecture/auth-model
 bugfix/n-plus-one-userlist
 pattern/e2e-test-suffix
