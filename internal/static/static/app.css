@@ -115,12 +115,8 @@
   --eg-danger:          #ef4444;
   --eg-warning:         #f59e0b;
 
-  /* Color — semantic dot colors */
+  /* Color — accent dot */
   --eg-dot-emerald:     #22c55e;
-  --eg-dot-violet:      #a78bfa;
-  --eg-dot-blue:        #60a5fa;
-  --eg-dot-amber:       #fbbf24;
-  --eg-dot-cyan:        #22d3ee;
 
   /* Typography — font stacks */
   --eg-mono-stack:      'Geist Mono', 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
