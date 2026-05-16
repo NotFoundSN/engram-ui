@@ -151,7 +151,11 @@ func (m Model) viewReview() string {
 			b.WriteString(fmt.Sprintf("%-40s  %-15s  %-15s\n", it.ID, before, after))
 		}
 		b.WriteString("\n")
-		b.WriteString(styleHelp.Render("Press Enter to apply all changes."))
+		if m.applying {
+			b.WriteString(fmt.Sprintf("%s applying changes…", m.spinner.View()))
+		} else {
+			b.WriteString(styleHelp.Render("Press Enter to apply all changes."))
+		}
 	}
 
 	if len(m.results) > 0 {

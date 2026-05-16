@@ -212,6 +212,58 @@ func TestModel_ReviewTabRendersStaged(t *testing.T) {
 	}
 }
 
+func TestModel_ApplyingShowsSpinnerInReview(t *testing.T) {
+	// While apply is in flight, the Review tab must show a visible indicator
+	// so the user knows the TUI is doing work (not frozen).
+	m, _ := newTestModel(t)
+	// Stage a change and jump to Review.
+	model, _ := m.Update(keyMsg(" "))
+	m = model.(Model)
+	model, _ = m.Update(keyMsg("4"))
+	m = model.(Model)
+	// Simulate the apply-in-flight state.
+	m.applying = true
+
+	out := m.View()
+	if !contains(out, "applying") {
+		t.Errorf("View() while m.applying=true should contain 'applying' indicator; got:\n%s", out)
+	}
+}
+
+func TestModel_EnterStartsApplyAndSpinner(t *testing.T) {
+	// Pressing Enter on Review with staged changes must:
+	//   - set applying=true (blocks input + drives the spinner render)
+	//   - return a non-nil cmd that fires both the async Apply AND the
+	//     spinner tick (a tea.Batch).
+	m, _ := newTestModel(t)
+	model, _ := m.Update(keyMsg(" "))
+	m = model.(Model)
+	model, _ = m.Update(keyMsg("4")) // Review tab
+	m = model.(Model)
+
+	model, cmd := m.Update(keyMsg("enter"))
+	m = model.(Model)
+
+	if !m.applying {
+		t.Error("after enter on Review with staged: applying should be true")
+	}
+	if cmd == nil {
+		t.Fatal("after enter on Review with staged: cmd should not be nil (need applyCmd + spinner.Tick)")
+	}
+}
+
+func TestModel_ApplyDoneClearsApplying(t *testing.T) {
+	// When applyDoneMsg arrives, applying flips back to false so the
+	// spinner stops rendering and input is unblocked.
+	m, _ := newTestModel(t)
+	m.applying = true
+	model, _ := m.Update(applyDoneMsg{results: []Result{{ItemID: "autostart", Action: "install", OK: true}}})
+	m = model.(Model)
+	if m.applying {
+		t.Error("after applyDoneMsg: applying should be false")
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || indexOf(s, substr) >= 0)
 }

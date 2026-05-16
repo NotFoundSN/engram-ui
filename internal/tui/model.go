@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // Model is the Bubbletea state for the engram-ui installer TUI.
@@ -25,6 +27,7 @@ type Model struct {
 
 	confirmingQuit bool
 	applying       bool
+	spinner        spinner.Model
 	results        []Result
 	width, height  int
 }
@@ -37,6 +40,9 @@ func NewModel(home, xdg string) Model {
 	for _, it := range items {
 		current[it.ID] = DetectState(it, home, xdg)
 	}
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
 	return Model{
 		home:      home,
 		xdg:       xdg,
@@ -45,6 +51,7 @@ func NewModel(home, xdg string) Model {
 		desired:   make(map[string]State),
 		activeTab: TabServer,
 		cursor:    map[Tab]int{TabServer: 0, TabSkillsClaude: 0, TabSkillsOpenCode: 0, TabReview: 0},
+		spinner:   sp,
 	}
 }
 
@@ -70,6 +77,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.desired = make(map[string]State)
 		return m, nil
+
+	case spinner.TickMsg:
+		// Only advance the spinner while an apply is in flight. Otherwise the
+		// tick is a stale message from a completed run — drop it so we don't
+		// schedule a new tick forever.
+		if !m.applying {
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 
 	case tea.KeyMsg:
 		return m.updateKey(msg)
@@ -137,7 +155,7 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		if m.activeTab == TabReview && len(m.desired) > 0 {
 			m.applying = true
-			return m, m.applyCmd()
+			return m, tea.Batch(m.applyCmd(), m.spinner.Tick)
 		}
 		return m, nil
 	}
