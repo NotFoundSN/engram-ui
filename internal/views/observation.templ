@@ -56,61 +56,136 @@ func siblingHref(siblingID int64, project, prefix string) string {
 
 templ ObservationDetail(o *client.Observation, renderMD bool, back string, siblings []client.Observation, siblingsPrefix string, hasMoreSiblings bool) {
 	@Layout(o.Title) {
-		<a href={ templ.SafeURL(backOrRoot(back)) } class="mb-6 inline-block text-xs text-slate-500 hover:text-slate-300">← back</a>
-		<article class="rounded-lg border border-slate-800 bg-slate-900/40 p-6">
-			<header class="mb-4 flex items-baseline justify-between gap-4">
-				<h1 class="text-xl font-semibold tracking-tight text-slate-100">{ o.Title }</h1>
-				<div class="flex items-center gap-3">
-					@viewToggle(o.ID, renderMD)
-					<span class="shrink-0 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] uppercase tracking-wider text-slate-300">
-						{ o.Type }
-					</span>
-				</div>
-			</header>
-			<dl class="mb-6 grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
-				@metaRow("ID", fmt.Sprintf("#%d", o.ID))
-				@metaRow("Created", o.CreatedAt)
-				@metaRow("Scope", o.Scope)
-				if o.Project != nil {
-					@metaRow("Project", *o.Project)
-				}
-				if o.TopicKey != nil {
-					@topicKeyMetaRow(*o.TopicKey, o.Project)
-				}
-				if o.ToolName != nil {
-					@metaRow("Tool", *o.ToolName)
-				}
-				if o.RevisionCount > 0 {
-					@metaRow("Revisions", fmt.Sprintf("%d", o.RevisionCount))
-				}
-			</dl>
-			if len(siblings) > 1 {
-				@siblingsSection(o.ID, siblings, siblingsPrefix, hasMoreSiblings, o.Project)
-			}
-			if renderMD {
-				<div class="prose prose-invert prose-sm max-w-none rounded-md bg-slate-950 p-4 prose-headings:text-slate-100 prose-code:text-emerald-200 prose-a:text-emerald-300">
-					@templ.Raw(render.Markdown(o.Content))
-				</div>
-			} else {
-				<pre class="whitespace-pre-wrap break-words rounded-md bg-slate-950 p-4 text-sm text-slate-200">{ o.Content }</pre>
-			}
+		<a href={ templ.SafeURL(backOrRoot(back)) } class="obs-back-link">← back</a>
+		<article class="obs-detail">
+			<div class="detail-grid">
+				<section class="obs-detail__main">
+					<header class="obs-detail__head">
+						<h1 class="obs-detail__title">{ o.Title }</h1>
+						<div class="view-toggle">
+							@viewToggle(o.ID, renderMD)
+							<span class="type-badge">{ o.Type }</span>
+						</div>
+					</header>
+					if len(siblings) > 1 {
+						@siblingsSection(o.ID, siblings, siblingsPrefix, hasMoreSiblings, o.Project)
+					}
+					<div class="obs-detail__body">
+						if renderMD {
+							<div class="markdown">
+								@templ.Raw(render.Markdown(o.Content))
+							</div>
+						} else {
+							<pre>{ o.Content }</pre>
+						}
+					</div>
+				</section>
+				<aside class="meta-sidebar">
+					<div class="meta-card">
+						<div class="meta-grid">
+							if o.Project != nil {
+								<div class="meta-row">
+									<div class="meta-field">
+										<span class="meta-field__label">project</span>
+										<span class="meta-field__value">{ *o.Project }</span>
+									</div>
+								</div>
+							} else {
+								<div class="meta-row">
+									<div class="meta-field">
+										<span class="meta-field__label">project</span>
+										<span class="meta-field__value">—</span>
+									</div>
+								</div>
+							}
+							<div class="meta-row">
+								<div class="meta-field">
+									<span class="meta-field__label">scope</span>
+									<span class="meta-field__value">{ o.Scope }</span>
+								</div>
+							</div>
+							<div class="meta-row">
+								<div class="meta-field">
+									<span class="meta-field__label">type</span>
+									<span class="meta-field__value">{ o.Type }</span>
+								</div>
+							</div>
+							if o.TopicKey != nil {
+								<div class="meta-row meta-row--full">
+									<div class="meta-field">
+										<span class="meta-field__label">topic_key</span>
+										<span class="meta-field__value">
+											if o.Project != nil && *o.TopicKey != "" && hasSlash(*o.TopicKey) {
+												<a href={ templ.SafeURL(topicKeyPrefixLink(*o.Project, *o.TopicKey)) } class="meta-link">{ *o.TopicKey }</a>
+											} else {
+												{ *o.TopicKey }
+											}
+										</span>
+									</div>
+								</div>
+							} else {
+								<div class="meta-row meta-row--full">
+									<div class="meta-field">
+										<span class="meta-field__label">topic_key</span>
+										<span class="meta-field__value">—</span>
+									</div>
+								</div>
+							}
+							<div class="meta-row">
+								<div class="meta-field">
+									<span class="meta-field__label">session</span>
+									<span class="meta-field__value">{ o.SessionID }</span>
+								</div>
+							</div>
+							<div class="meta-row">
+								<div class="meta-field">
+									<span class="meta-field__label">created_at</span>
+									<span class="meta-field__value">{ o.CreatedAt }</span>
+								</div>
+							</div>
+							<div class="meta-row">
+								<div class="meta-field">
+									<span class="meta-field__label">revisions</span>
+									<span class="meta-field__value">{ fmt.Sprintf("%d", o.RevisionCount) }</span>
+								</div>
+								<div class="meta-field">
+									<span class="meta-field__label">duplicates</span>
+									<span class="meta-field__value">{ fmt.Sprintf("%d", o.DuplicateCount) }</span>
+								</div>
+							</div>
+							<div class="meta-row">
+								<div class="meta-field">
+									<span class="meta-field__label">last_seen_at</span>
+									<span class="meta-field__value">
+										if o.LastSeenAt != nil {
+											{ *o.LastSeenAt }
+										} else {
+											{ o.CreatedAt }
+										}
+									</span>
+								</div>
+							</div>
+						</div>
+					</div>
+				</aside>
+			</div>
 		</article>
 	}
 }
 
 templ siblingsSection(currentID int64, siblings []client.Observation, prefix string, hasMore bool, project *string) {
-	<section id="siblings-section" class="mb-6 rounded-md border border-slate-800 bg-slate-900/30 p-4">
-		<header class="mb-2 text-xs text-slate-500">
-			Siblings under <span class="font-mono text-slate-300">{ prefix }</span>
+	<section id="siblings-section" class="siblings-section">
+		<header class="siblings-section__header">
+			Siblings under <span class="siblings-section__prefix">{ prefix }</span>
 		</header>
 		<details>
-			<summary class="cursor-pointer list-none">
-				<div class="flex items-center gap-2">
+			<summary class="siblings-section__summary">
+				<div class="siblings-section__summary-inner">
 					@currentSiblingInline(siblings, currentID)
-					<span class="ml-2 shrink-0 text-[10px] text-emerald-300 hover:text-emerald-200">▶ show others</span>
+					<span class="siblings-section__toggle">▶ show others</span>
 				</div>
 			</summary>
-			<ul class="mt-3 space-y-1.5">
+			<ul class="siblings-section__list">
 				for _, sib := range siblings {
 					if sib.ID != currentID {
 						@siblingRow(sib, currentID, prefix, project)
@@ -118,7 +193,7 @@ templ siblingsSection(currentID int64, siblings []client.Observation, prefix str
 				}
 			</ul>
 			if hasMore && project != nil {
-				<a href={ templ.SafeURL("/p/" + *project + "?topic_key_prefix=" + url.QueryEscape(prefix)) } class="mt-3 inline-block text-xs text-emerald-300 hover:text-emerald-200">see all →</a>
+				<a href={ templ.SafeURL("/p/" + *project + "?topic_key_prefix=" + url.QueryEscape(prefix)) } class="siblings-section__see-all">see all →</a>
 			}
 		</details>
 	</section>
@@ -127,10 +202,10 @@ templ siblingsSection(currentID int64, siblings []client.Observation, prefix str
 templ currentSiblingInline(siblings []client.Observation, currentID int64) {
 	for _, sib := range siblings {
 		if sib.ID == currentID {
-			<div class="flex flex-1 items-center gap-2 rounded px-2 py-1 text-xs text-slate-400">
-				<span class="shrink-0 rounded bg-slate-700/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-slate-300">{ sib.Type }</span>
-				<span class="truncate">{ sib.Title }</span>
-				<span class="ml-auto shrink-0 rounded-full border border-emerald-400/60 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-emerald-200">current</span>
+			<div class="sibling-row sibling-row--current">
+				<span class="sibling-row__type">{ sib.Type }</span>
+				<span class="sibling-row__title">{ sib.Title }</span>
+				<span class="sibling-row__badge">current</span>
 			</div>
 		}
 	}
@@ -138,61 +213,45 @@ templ currentSiblingInline(siblings []client.Observation, currentID int64) {
 
 templ siblingRow(sib client.Observation, currentID int64, prefix string, project *string) {
 	if sib.ID == currentID {
-		<li class="flex items-center gap-2 rounded px-2 py-1 text-xs text-slate-400">
-			<span class="shrink-0 rounded bg-slate-700/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-slate-300">{ sib.Type }</span>
-			<span class="truncate">{ sib.Title }</span>
-			<span class="ml-auto shrink-0 rounded-full border border-emerald-400/60 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-emerald-200">current</span>
+		<li class="sibling-row sibling-row--current">
+			<span class="sibling-row__type">{ sib.Type }</span>
+			<span class="sibling-row__title">{ sib.Title }</span>
+			<span class="sibling-row__badge">current</span>
 		</li>
 	} else {
-		<li>
+		<li class="sibling-row">
 			if project != nil {
-				<a href={ templ.SafeURL(siblingHref(sib.ID, *project, prefix)) } class="flex items-center gap-2 rounded px-2 py-1 text-xs text-slate-300 hover:bg-slate-800/60 hover:text-slate-100">
-					<span class="shrink-0 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-slate-300">{ sib.Type }</span>
-					<span class="truncate">{ sib.Title }</span>
+				<a href={ templ.SafeURL(siblingHref(sib.ID, *project, prefix)) } class="sibling-row__link">
+					<span class="sibling-row__type">{ sib.Type }</span>
+					<span class="sibling-row__title">{ sib.Title }</span>
 				</a>
 			} else {
-				<a href={ templ.SafeURL(fmt.Sprintf("/m/%d", sib.ID)) } class="flex items-center gap-2 rounded px-2 py-1 text-xs text-slate-300 hover:bg-slate-800/60 hover:text-slate-100">
-					<span class="shrink-0 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-slate-300">{ sib.Type }</span>
-					<span class="truncate">{ sib.Title }</span>
+				<a href={ templ.SafeURL(fmt.Sprintf("/m/%d", sib.ID)) } class="sibling-row__link">
+					<span class="sibling-row__type">{ sib.Type }</span>
+					<span class="sibling-row__title">{ sib.Title }</span>
 				</a>
 			}
 		</li>
 	}
-}
-
-// topicKeyMetaRow renders the topic_key meta-row. If the key has ≥1 slash,
-// the value is wrapped in a clickable link pointing to the project view
-// filtered by the strip-last-segment prefix.
-templ topicKeyMetaRow(topicKey string, project *string) {
-	<div>
-		<dt class="text-slate-500">Topic key</dt>
-		<dd class="font-mono text-slate-200">
-			if project != nil && topicKey != "" && hasSlash(topicKey) {
-				<a href={ templ.SafeURL(topicKeyPrefixLink(*project, topicKey)) } class="hover:text-emerald-300">{ topicKey }</a>
-			} else {
-				{ topicKey }
-			}
-		</dd>
-	</div>
 }
 
 templ viewToggle(id int64, renderMD bool) {
 	if renderMD {
 		<a
 			href={ templ.SafeURL(fmt.Sprintf("/observations/%d?raw=1", id)) }
-			class="rounded border border-slate-700 px-2 py-0.5 text-[10px] uppercase tracking-wider text-slate-400 hover:border-slate-500 hover:text-slate-200"
+			class="view-toggle__link"
 		>View raw</a>
 	} else {
 		<a
 			href={ templ.SafeURL(fmt.Sprintf("/observations/%d", id)) }
-			class="rounded border border-emerald-400/60 bg-emerald-400/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-emerald-200 hover:border-emerald-400"
+			class="view-toggle__link is-active"
 		>View rendered</a>
 	}
 }
 
 templ metaRow(label, value string) {
 	<div>
-		<dt class="text-slate-500">{ label }</dt>
-		<dd class="font-mono text-slate-200">{ value }</dd>
+		<dt class="meta-field__label">{ label }</dt>
+		<dd class="meta-field__value">{ value }</dd>
 	</div>
 }
