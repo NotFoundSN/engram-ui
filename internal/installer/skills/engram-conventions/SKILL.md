@@ -45,7 +45,7 @@ not in the API.
 6. **shareable URLs** — when the user is likely to want to read or validate
    saved content (spec/design/proposal/plan/report just generated, interactive
    review mode, substantial content), SHOULD emit
-   `Review: http://localhost:7438/observations/{id}` (`{id}` from the
+   `Review: http://localhost:7438/m/{id}` (`{id}` from the
    `mem_save` response) so they can review in engram-ui. MAY skip for trivial
    saves or autonomous chains. See `lifecycle.md` for full format,
    `ENGRAM_UI_URL` override, fallback, and situational guidance.

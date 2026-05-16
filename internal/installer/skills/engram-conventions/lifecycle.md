@@ -12,7 +12,7 @@ and updates.
 | `mem_context` | Start of any session | Cheap, always the first call when picking up work |
 | `mem_search` | Find by keywords, type, or namespace | Filter by `type`, `project`, `scope`, `topic_key_prefix`. Results are **truncated** — follow up with `mem_get_observation`. |
 | `mem_get_observation` | Full content of one observation | Required after a search hit — search results are previews only |
-| `mem_search` with exact `topic_key` | Timeline of an artifact | Returns all revisions oldest → newest |
+| `mem_search` with exact `topic_key` | Current state of an artifact | Returns the current row for that `topic_key`. Engram upserts in place — historical content is NOT preserved, only `revision_count` is tracked. |
 | `mem_current_project` | Verify cwd → project mapping | Use when multi-repo setup is uncertain |
 
 > **Note on `topic_key_prefix`**: `topic_key_prefix` is a documented
@@ -21,8 +21,8 @@ and updates.
 > `type`, `project`, `scope`, `topic_key`, and `limit`.
 >
 > To achieve prefix-style queries via MCP, use one of these workarounds:
-> (a) request by exact `topic_key` (returns the timeline of one
-> observation); (b) filter by `type` plus a `query` keyword and post-filter
+> (a) request by exact `topic_key` (returns the current row for that
+> artifact); (b) filter by `type` plus a `query` keyword and post-filter
 > results in your client by `topic_key.startswith("<prefix>")`;
 > (c) use `query` with the prefix string as a keyword — FTS will match
 > observations whose content or title mentions the prefix.
@@ -45,7 +45,7 @@ mem_context({"project": "myapp"})
 mem_search({"type": "spec", "query": "auth-refactor", "project": "myapp"})
 # Then in your code: filter results where topic_key.startswith("sdd/auth-refactor/")
 
-# Timeline of one artifact
+# Current state of one artifact (engram upserts in place — no historical content)
 mem_search({"topic_key": "sdd/auth-refactor/spec", "project": "myapp"})
 
 # Get full content (required after search)
@@ -65,7 +65,7 @@ can open it in engram-ui for review.
 ### Format
 
 ```
-Review: http://localhost:7438/observations/{id}
+Review: http://localhost:7438/m/{id}
 ```
 
 `{id}` is the `id` field returned in the `mem_save` response envelope.
@@ -76,7 +76,7 @@ Review: http://localhost:7438/observations/{id}
 If the user runs engram-ui on a non-default host or port, the convention is
 to read `ENGRAM_UI_URL` from the environment and substitute it for the
 `http://localhost:7438` prefix. Example: `ENGRAM_UI_URL=http://10.0.0.5:9000`
-→ emit `Review: http://10.0.0.5:9000/observations/{id}`.
+→ emit `Review: http://10.0.0.5:9000/m/{id}`.
 
 ### Fallback — engram-ui not installed
 
@@ -90,7 +90,7 @@ correctness.
 A single line in the agent's response, immediately after the save
 confirmation. Example:
 
-> Saved `sdd/auth-refactor/spec` to engram (id 124). Review: http://localhost:7438/observations/124
+> Saved `sdd/auth-refactor/spec` to engram (id 124). Review: http://localhost:7438/m/124
 
 **Situations where surfacing the URL is appropriate:**
 
@@ -290,7 +290,7 @@ mem_save({
   "project": "myapp",
   "content": "<updated content with new requirements added>"
 })
-# revision_count is now incremented; previous version preserved in history
+# revision_count is incremented. The previous content is OVERWRITTEN in place — engram does not preserve historical content snapshots today.
 ```
 
 ---

@@ -80,7 +80,7 @@ mem_save({
 })
 ```
 
-> Saved `sdd/auth-refactor/spec` to engram (id 121). Review: http://localhost:7438/observations/121
+> Saved `sdd/auth-refactor/spec` to engram (id 121). Review: http://localhost:7438/m/121
 
 ### sdd-design → `design`
 
@@ -97,7 +97,7 @@ mem_save({
 })
 ```
 
-> Saved `sdd/auth-refactor/design` to engram (id 122). Review: http://localhost:7438/observations/122
+> Saved `sdd/auth-refactor/design` to engram (id 122). Review: http://localhost:7438/m/122
 
 ### sdd-tasks → `tasks`
 ```
@@ -164,7 +164,7 @@ mem_save({
 mem_search({"query": "auth-refactor", "project": "myapp"})
 # Then in your code: filter results where topic_key.startswith("sdd/auth-refactor/")
 
-# Timeline of one phase (all revisions)
+# Current state of one phase (engram upserts in place — no historical content)
 mem_search({"topic_key": "sdd/auth-refactor/spec", "project": "myapp"})
 
 # All proposals in this project

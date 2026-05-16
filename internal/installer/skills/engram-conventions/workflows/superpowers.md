@@ -45,7 +45,7 @@ Resolution — conditional behavior:
 | Storage (Superpowers context only) | Purpose |
 |---|---|
 | Disk file | Git history, team collaboration, diffs, PR review |
-| Engram observation | Cross-session searchability, timeline views in engram-ui |
+| Engram observation | Cross-session searchability and review URLs in engram-ui |
 
 When a customized Superpowers fork that saves only to engram is deployed,
 this carve-out simplifies to "use engram only" and this entire section
@@ -61,7 +61,7 @@ collapses to a one-line note.
 | `writing-plans` (plan) | `## Steps` / `## Order` / `## Validation` |
 
 Keep the engram content concise — it is a summary for searchability and
-timeline rendering, not a full duplicate of the disk doc. 3–8 sentences or
+review-in-UI, not a full duplicate of the disk doc. 3–8 sentences or
 bullet points per section is appropriate.
 
 ---
@@ -83,7 +83,7 @@ mem_save({
 })
 ```
 
-> Saved `superpowers/engram-conventions/design` to engram (id 123). Review: http://localhost:7438/observations/123
+> Saved `superpowers/engram-conventions/design` to engram (id 123). Review: http://localhost:7438/m/123
 
 ### `writing-plans` → `plan`
 
@@ -100,7 +100,7 @@ mem_save({
 })
 ```
 
-> Saved `superpowers/engram-conventions/plan` to engram (id 124). Review: http://localhost:7438/observations/124
+> Saved `superpowers/engram-conventions/plan` to engram (id 124). Review: http://localhost:7438/m/124
 
 ---
 

@@ -1,8 +1,8 @@
 # topic_key Namespacing Convention
 
 `topic_key` is the stable identifier that groups related observations and
-enables timeline views in engram-ui. Using a consistent shape makes
-observations queryable, groupable, and revisable.
+enables scoped lookups in engram-ui. Using a consistent shape makes
+observations queryable and upsert-able under the same identifier.
 
 ---
 
@@ -21,10 +21,11 @@ observations queryable, groupable, and revisable.
 - **Max 4 levels deep** — deeper nesting produces keys that are hard to scan
   and query; restructure the namespace instead.
 - **Stable identifier** — do not rename a `topic_key` after first use.
-  Engram's upsert relies on the exact key; renaming breaks revision history
-  and leaves orphaned observations.
+  Engram's upsert relies on the exact key; renaming creates an orphaned
+  observation and breaks the `revision_count` chain.
 - **Same `topic_key` + same `project` = upsert** — engram increments
-  `revision_count`. The previous revision is preserved in history.
+  `revision_count` and OVERWRITES the row in place. Historical content is
+  NOT preserved today (engram tracks only the latest content + a counter).
 - **Different `topic_key` = new observation** — use a new phase suffix when
   moving from one artifact type to the next (e.g., `/spec` → `/design`).
 
@@ -101,14 +102,14 @@ mem_save({"topic_key": "sdd/auth-refactor/design", "...": "..."})  # design phas
 
 ---
 
-## Timeline Queries
+## Topic Queries
 
-`mem_search` with an exact `topic_key` returns all revisions of that
-observation, oldest to newest. This is how engram-ui renders the evolution of
-an artifact over time.
+`mem_search` with an exact `topic_key` returns the current row for that
+artifact — not its history. Engram upserts in place, so previous content
+is not preserved.
 
 ```
-# All revisions of the spec for auth-refactor
+# Current state of the auth-refactor spec (engram has no historical content)
 mem_search({"topic_key": "sdd/auth-refactor/spec"})
 
 # Goal: retrieve all artifacts for the auth-refactor change
@@ -120,6 +121,6 @@ mem_search({"query": "auth-refactor", "project": "myapp"})
 mem_search({"type": "proposal", "project": "myapp"})
 ```
 
-Consistent `topic_key` naming is what makes these timeline views possible.
-Inconsistent keys (mixed case, renamed keys, no namespace) break timeline
-grouping and require manual investigation to reconstruct history.
+Consistent `topic_key` naming is what makes these scoped lookups reliable.
+Inconsistent keys (mixed case, renamed keys, no namespace) break grouping
+and require manual investigation to reconstruct relationships.

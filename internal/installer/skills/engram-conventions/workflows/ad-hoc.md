@@ -57,7 +57,7 @@ mem_save({
 })
 ```
 
-> Saved `decision/cookie-vs-localstorage` to engram (id 125). Review: http://localhost:7438/observations/125
+> Saved `decision/cookie-vs-localstorage` to engram (id 125). Review: http://localhost:7438/m/125
 
 ### `architecture`
 
@@ -75,7 +75,7 @@ mem_save({
 })
 ```
 
-> Saved `architecture/auth-model` to engram (id 126). Review: http://localhost:7438/observations/126
+> Saved `architecture/auth-model` to engram (id 126). Review: http://localhost:7438/m/126
 
 ### `bugfix`
 ```
