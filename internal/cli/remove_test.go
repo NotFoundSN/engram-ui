@@ -101,7 +101,7 @@ func TestCmdRemove_ExplicitBoth(t *testing.T) {
 	}
 }
 
-// --- Single tool: claude ---
+// --- AUX (REQ-2.3): Remove single tool — claude ---
 
 func TestCmdRemove_ToolClaude(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer
@@ -130,7 +130,7 @@ func TestCmdRemove_ToolClaude(t *testing.T) {
 	}
 }
 
-// --- Single tool: opencode ---
+// --- AUX (REQ-2.4): Remove single tool — opencode ---
 
 func TestCmdRemove_ToolOpenCode(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer
@@ -156,7 +156,7 @@ func TestCmdRemove_ToolOpenCode(t *testing.T) {
 	}
 }
 
-// --- SCN-07 (remove variant): Remove autostart — no tool flag ---
+// --- AUX (REQ-4.3): Remove autostart — no tool flag ---
 
 func TestCmdRemove_Autostart_NoToolFlag(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer
@@ -184,7 +184,7 @@ func TestCmdRemove_Autostart_NoToolFlag(t *testing.T) {
 	}
 }
 
-// --- Remove autostart with --tool flag — note + proceed ---
+// --- SCN-07 (remove variant): Remove autostart — tool flag present (note + proceed) ---
 
 func TestCmdRemove_Autostart_WithToolFlag_NoteAndProceed(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer
@@ -208,7 +208,7 @@ func TestCmdRemove_Autostart_WithToolFlag_NoteAndProceed(t *testing.T) {
 	}
 }
 
-// --- Not-registered sentinel → stdout "not registered" line, exit 0 ---
+// --- AUX (REQ-2.5): Not-registered sentinel — empty dest = "nothing to remove" ---
 
 func TestCmdRemove_NotRegistered_Sentinel(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer
@@ -273,7 +273,7 @@ func TestCmdRemove_MissingSkill_Exit2(t *testing.T) {
 	}
 }
 
-// --- Invalid --tool value — exit 2 ---
+// --- SCN-11 (remove variant): Invalid --tool value — exit 2 ---
 
 func TestCmdRemove_InvalidToolValue_Exit2(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer

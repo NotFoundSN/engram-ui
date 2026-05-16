@@ -27,6 +27,8 @@ var sampleSkills = []installer.Skill{
 	{Name: "debug", Description: "debugging helper"},
 }
 
+// --- SCN-08: list — plain text ---
+
 func TestCmdList_PlainText_OneLinePerSkill(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer
 	withListSeam(&outBuf, &errBuf, func() ([]installer.Skill, error) { return sampleSkills, nil }, func() {
@@ -47,6 +49,8 @@ func TestCmdList_PlainText_OneLinePerSkill(t *testing.T) {
 		t.Errorf("stderr should be empty, got: %q", errBuf.String())
 	}
 }
+
+// --- SCN-09: list --json — machine-readable ---
 
 func TestCmdList_JSON_ValidArray(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer
@@ -79,6 +83,8 @@ func TestCmdList_JSON_ValidArray(t *testing.T) {
 	}
 }
 
+// --- SCN-16: list --json stdout purity under error ---
+
 func TestCmdList_JSON_StdoutPurity_CatalogError(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer
 	withListSeam(&outBuf, &errBuf, func() ([]installer.Skill, error) {
@@ -99,6 +105,8 @@ func TestCmdList_JSON_StdoutPurity_CatalogError(t *testing.T) {
 	}
 }
 
+// --- AUX (REQ-3.3): list --json empty catalog emits [] ---
+
 func TestCmdList_JSON_EmptyCatalog(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer
 	withListSeam(&outBuf, &errBuf, func() ([]installer.Skill, error) { return []installer.Skill{}, nil }, func() {
@@ -118,6 +126,8 @@ func TestCmdList_JSON_EmptyCatalog(t *testing.T) {
 	}
 }
 
+// --- AUX (REQ-3.2): list plain-text empty catalog emits zero lines ---
+
 func TestCmdList_PlainText_EmptyCatalog(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer
 	withListSeam(&outBuf, &errBuf, func() ([]installer.Skill, error) { return []installer.Skill{}, nil }, func() {
@@ -132,6 +142,8 @@ func TestCmdList_PlainText_EmptyCatalog(t *testing.T) {
 	}
 }
 
+// --- AUX (REQ-6.3): list unexpected positional arg → exit 2 ---
+
 func TestCmdList_UnexpectedArg_Exit2(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer
 	withListSeam(&outBuf, &errBuf, func() ([]installer.Skill, error) { return sampleSkills, nil }, func() {
@@ -145,6 +157,8 @@ func TestCmdList_UnexpectedArg_Exit2(t *testing.T) {
 		t.Errorf("stderr should mention unexpected arg, got: %q", errBuf.String())
 	}
 }
+
+// --- AUX (REQ-3.5 + REQ-6.2): list plain-text catalog error → stderr + exit 1 ---
 
 func TestCmdList_PlainText_CatalogError_Exit1(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer

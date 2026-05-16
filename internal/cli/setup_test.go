@@ -292,7 +292,7 @@ func TestCmdSetup_MissingSkill_Exit2(t *testing.T) {
 	}
 }
 
-// --- Invalid --tool value — exit 2 (SCN-11) ---
+// --- SCN-11: Invalid --tool value — exit 2 ---
 
 func TestCmdSetup_InvalidToolValue_Exit2(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer
@@ -309,7 +309,7 @@ func TestCmdSetup_InvalidToolValue_Exit2(t *testing.T) {
 	}
 }
 
-// --- Empty --tool value — exit 2 (SCN-12) ---
+// --- SCN-12: Empty --tool value — exit 2 ---
 
 func TestCmdSetup_EmptyToolValue_Exit2(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer
@@ -326,7 +326,7 @@ func TestCmdSetup_EmptyToolValue_Exit2(t *testing.T) {
 	}
 }
 
-// --- Per-leg [leg] prefix — also for single-leg ---
+// --- AUX (REQ-1.5): Per-leg [leg] prefix on single-leg invocations ---
 
 func TestCmdSetup_LegPrefix_SingleLeg(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer
