@@ -1,8 +1,10 @@
 package installer
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 )
 
@@ -11,18 +13,16 @@ import (
 // writes files with mode 0644. The operation is idempotent — running it again
 // overwrites existing files without error.
 func CopySkill(dst string, fsys fs.FS, srcRoot string) error {
-	return fs.WalkDir(fsys, srcRoot, func(path string, d fs.DirEntry, err error) error {
+	return fs.WalkDir(fsys, srcRoot, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
 		// Compute relative path from srcRoot (using slash-separated path from embed.FS).
-		// filepath.Rel needs OS-native separators, but embed.FS always uses '/'.
-		relSlash := path[len(srcRoot):]
+		relSlash := p[len(srcRoot):]
 		if len(relSlash) > 0 && relSlash[0] == '/' {
 			relSlash = relSlash[1:]
 		}
-		// Convert to OS-native path separator for destination.
 		rel := filepath.FromSlash(relSlash)
 		target := filepath.Join(dst, rel)
 
@@ -30,15 +30,13 @@ func CopySkill(dst string, fsys fs.FS, srcRoot string) error {
 			return os.MkdirAll(target, 0o755)
 		}
 
-		// Read file content from embed.FS.
 		data, err := fsys.(interface {
 			ReadFile(string) ([]byte, error)
-		}).ReadFile(path)
+		}).ReadFile(p)
 		if err != nil {
 			return err
 		}
 
-		// Ensure parent directory exists.
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
 		}
@@ -47,35 +45,47 @@ func CopySkill(dst string, fsys fs.FS, srcRoot string) error {
 	})
 }
 
-// InstallClaudeCodeSkill copies the embedded skill to the Claude Code skills directory.
-func InstallClaudeCodeSkill() (Result, error) {
+// InstallClaudeCodeSkill copies the embedded Claude variant of the named skill
+// (skills/{name}/claude/) to the Claude Code skills directory.
+func InstallClaudeCodeSkill(name string) (Result, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return Result{}, err
 	}
-	return installSkill(ClaudeSkillDir(home))
+	srcRoot := path.Join(skillsEmbedRoot, name, "claude")
+	return installSkill(ClaudeSkillDir(home, name), srcRoot)
 }
 
-// InstallOpenCodeSkill copies the embedded skill to the OpenCode skills directory.
-func InstallOpenCodeSkill() (Result, error) {
+// InstallOpenCodeSkill copies the embedded OpenCode variant of the named skill
+// (skills/{name}/opencode/) to the OpenCode skills directory.
+func InstallOpenCodeSkill(name string) (Result, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return Result{}, err
 	}
 	xdg := os.Getenv("XDG_CONFIG_HOME")
-	return installSkill(OpenCodeSkillDir(home, xdg))
+	srcRoot := path.Join(skillsEmbedRoot, name, "opencode")
+	return installSkill(OpenCodeSkillDir(home, xdg, name), srcRoot)
 }
 
-// installSkill is the shared implementation — copies the embedded skill to destRoot.
-func installSkill(destRoot string) (Result, error) {
-	// Determine action: installed or overwritten.
+// installSkill copies the embedded subtree at srcRoot to destRoot. It returns
+// ActionInstalled when destRoot is empty, ActionOverwritten when SKILL.md
+// already exists there.
+func installSkill(destRoot, srcRoot string) (Result, error) {
+	// Verify srcRoot exists in the embed before doing any FS writes — gives a
+	// clear error when caller passes a name that has no claude/ or opencode/
+	// variant yet (e.g. skill still pending migration).
+	if _, err := fs.Stat(skillFS, srcRoot+"/SKILL.md"); err != nil {
+		return Result{}, fmt.Errorf("skill source %q not found in embed: %w", srcRoot, err)
+	}
+
 	_, statErr := os.Stat(filepath.Join(destRoot, "SKILL.md"))
 	action := ActionInstalled
 	if statErr == nil {
 		action = ActionOverwritten
 	}
 
-	if err := CopySkill(destRoot, skillFS, skillEmbedRoot); err != nil {
+	if err := CopySkill(destRoot, skillFS, srcRoot); err != nil {
 		return Result{}, err
 	}
 

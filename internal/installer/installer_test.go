@@ -3,38 +3,45 @@ package installer
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestInstallClaudeCodeSkill(t *testing.T) {
+func TestInstallClaudeCodeSkill_Brainstorm(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
 	t.Setenv("USERPROFILE", tmpHome)
 
-	result, err := InstallClaudeCodeSkill()
+	result, err := InstallClaudeCodeSkill("brainstorm")
 	if err != nil {
-		t.Fatalf("InstallClaudeCodeSkill(): %v", err)
+		t.Fatalf("InstallClaudeCodeSkill(brainstorm): %v", err)
 	}
 
-	// Verify SKILL.md exists at expected path.
-	expectedDir := ClaudeSkillDir(tmpHome)
+	expectedDir := ClaudeSkillDir(tmpHome, "brainstorm")
 	skillMD := filepath.Join(expectedDir, "SKILL.md")
 	if _, statErr := os.Stat(skillMD); statErr != nil {
 		t.Errorf("InstallClaudeCodeSkill: SKILL.md not found at %q: %v", skillMD, statErr)
 	}
 
-	// Verify destination in result.
 	if result.Destination != expectedDir {
 		t.Errorf("InstallClaudeCodeSkill: Destination = %q, want %q", result.Destination, expectedDir)
 	}
 
-	// Verify action is ActionInstalled on first run.
 	if result.Action != ActionInstalled {
 		t.Errorf("InstallClaudeCodeSkill: Action = %q, want %q", result.Action, ActionInstalled)
 	}
 
+	// Verify the installed file is the CLAUDE variant (contains <HARD-GATE> tag, not blockquote).
+	data, err := os.ReadFile(skillMD)
+	if err != nil {
+		t.Fatalf("read installed SKILL.md: %v", err)
+	}
+	if !strings.Contains(string(data), "<HARD-GATE>") {
+		t.Errorf("InstallClaudeCodeSkill: expected <HARD-GATE> tag in Claude variant, not found")
+	}
+
 	// Second run: should report ActionOverwritten.
-	result2, err := InstallClaudeCodeSkill()
+	result2, err := InstallClaudeCodeSkill("brainstorm")
 	if err != nil {
 		t.Fatalf("InstallClaudeCodeSkill (second run): %v", err)
 	}
@@ -43,19 +50,18 @@ func TestInstallClaudeCodeSkill(t *testing.T) {
 	}
 }
 
-func TestInstallOpenCodeSkill(t *testing.T) {
+func TestInstallOpenCodeSkill_Brainstorm(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
 	t.Setenv("USERPROFILE", tmpHome)
-	t.Setenv("XDG_CONFIG_HOME", "") // clear any real env override
+	t.Setenv("XDG_CONFIG_HOME", "")
 
-	result, err := InstallOpenCodeSkill()
+	result, err := InstallOpenCodeSkill("brainstorm")
 	if err != nil {
-		t.Fatalf("InstallOpenCodeSkill(): %v", err)
+		t.Fatalf("InstallOpenCodeSkill(brainstorm): %v", err)
 	}
 
-	// Expected: {tmpHome}/.config/opencode/skills/engram-conventions/
-	expectedDir := OpenCodeSkillDir(tmpHome, "")
+	expectedDir := OpenCodeSkillDir(tmpHome, "", "brainstorm")
 	skillMD := filepath.Join(expectedDir, "SKILL.md")
 	if _, statErr := os.Stat(skillMD); statErr != nil {
 		t.Errorf("InstallOpenCodeSkill: SKILL.md not found at %q: %v", skillMD, statErr)
@@ -64,16 +70,25 @@ func TestInstallOpenCodeSkill(t *testing.T) {
 	if result.Destination != expectedDir {
 		t.Errorf("InstallOpenCodeSkill: Destination = %q, want %q", result.Destination, expectedDir)
 	}
+
+	// Verify the installed file is the OPENCODE variant (blockquote, no <HARD-GATE> XML tag).
+	data, err := os.ReadFile(skillMD)
+	if err != nil {
+		t.Fatalf("read installed SKILL.md: %v", err)
+	}
+	body := string(data)
+	if strings.Contains(body, "<HARD-GATE>") {
+		t.Errorf("InstallOpenCodeSkill: <HARD-GATE> XML tag should NOT appear in OpenCode variant")
+	}
+	if !strings.Contains(body, "HARD GATE — MANDATORY") {
+		t.Errorf("InstallOpenCodeSkill: expected blockquote-style HARD GATE in OpenCode variant")
+	}
 }
 
 func TestInstallAutostart(t *testing.T) {
-	// InstallAutostart uses os.Executable() internally — we can't easily stub that.
-	// But we can at least test that the function calls through to NewAutostartManager.
-	// On Windows, this will write a .bat to a temp APPDATA dir.
 	tmpAppData := t.TempDir()
 	t.Setenv("APPDATA", tmpAppData)
 
-	// Stub ResolveExecPath to return a predictable path.
 	orig := evalSymlinks
 	defer func() { evalSymlinks = orig }()
 	evalSymlinks = func() (string, error) {
@@ -103,7 +118,6 @@ func TestRemoveAutostart_NotRegistered(t *testing.T) {
 }
 
 func TestResolveExecPath(t *testing.T) {
-	// Stub evalSymlinks to return a predictable path.
 	orig := evalSymlinks
 	defer func() { evalSymlinks = orig }()
 

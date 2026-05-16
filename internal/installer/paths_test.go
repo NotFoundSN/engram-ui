@@ -7,32 +7,36 @@ import (
 
 func TestClaudeSkillDir(t *testing.T) {
 	cases := []struct {
-		name    string
-		homeDir string
-		want    string
+		name     string
+		homeDir  string
+		skill    string
+		want     string
 	}{
 		{
-			name:    "unix-style home",
+			name:    "unix-style home with brainstorm",
 			homeDir: "/home/user",
-			want:    filepath.Join("/home/user", ".claude", "skills", "engram-conventions"),
+			skill:   "brainstorm",
+			want:    filepath.Join("/home/user", ".claude", "skills", "brainstorm"),
 		},
 		{
-			name:    "windows home",
+			name:    "windows home with debug",
 			homeDir: `C:\Users\user`,
-			want:    filepath.Join(`C:\Users\user`, ".claude", "skills", "engram-conventions"),
+			skill:   "debug",
+			want:    filepath.Join(`C:\Users\user`, ".claude", "skills", "debug"),
 		},
 		{
-			name:    "macos home",
+			name:    "macos home with engram-conventions",
 			homeDir: "/Users/user",
+			skill:   "engram-conventions",
 			want:    filepath.Join("/Users/user", ".claude", "skills", "engram-conventions"),
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := ClaudeSkillDir(tc.homeDir)
+			got := ClaudeSkillDir(tc.homeDir, tc.skill)
 			if got != tc.want {
-				t.Errorf("ClaudeSkillDir(%q) = %q, want %q", tc.homeDir, got, tc.want)
+				t.Errorf("ClaudeSkillDir(%q, %q) = %q, want %q", tc.homeDir, tc.skill, got, tc.want)
 			}
 		})
 	}
@@ -43,39 +47,44 @@ func TestOpenCodeSkillDir(t *testing.T) {
 		name          string
 		homeDir       string
 		xdgConfigHome string
+		skill         string
 		want          string
 	}{
 		{
 			name:          "linux with XDG_CONFIG_HOME set",
 			homeDir:       "/home/user",
 			xdgConfigHome: "/home/user/.config",
-			want:          filepath.Join("/home/user/.config", "opencode", "skills", "engram-conventions"),
+			skill:         "brainstorm",
+			want:          filepath.Join("/home/user/.config", "opencode", "skills", "brainstorm"),
 		},
 		{
 			name:          "linux without XDG — falls back to home/.config",
 			homeDir:       "/home/user",
 			xdgConfigHome: "",
-			want:          filepath.Join("/home/user", ".config", "opencode", "skills", "engram-conventions"),
+			skill:         "debug",
+			want:          filepath.Join("/home/user", ".config", "opencode", "skills", "debug"),
 		},
 		{
 			name:          "macOS — always uses home/.config (not Library/Application Support)",
 			homeDir:       "/Users/user",
 			xdgConfigHome: "",
+			skill:         "engram-conventions",
 			want:          filepath.Join("/Users/user", ".config", "opencode", "skills", "engram-conventions"),
 		},
 		{
 			name:          "windows — always uses home/.config (not APPDATA)",
 			homeDir:       `C:\Users\user`,
 			xdgConfigHome: "",
-			want:          filepath.Join(`C:\Users\user`, ".config", "opencode", "skills", "engram-conventions"),
+			skill:         "brainstorm",
+			want:          filepath.Join(`C:\Users\user`, ".config", "opencode", "skills", "brainstorm"),
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := OpenCodeSkillDir(tc.homeDir, tc.xdgConfigHome)
+			got := OpenCodeSkillDir(tc.homeDir, tc.xdgConfigHome, tc.skill)
 			if got != tc.want {
-				t.Errorf("OpenCodeSkillDir(%q, %q) = %q, want %q", tc.homeDir, tc.xdgConfigHome, got, tc.want)
+				t.Errorf("OpenCodeSkillDir(%q, %q, %q) = %q, want %q", tc.homeDir, tc.xdgConfigHome, tc.skill, got, tc.want)
 			}
 		})
 	}

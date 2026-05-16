@@ -7,13 +7,13 @@ import (
 )
 
 // Function variables for installer calls — allows test injection.
-var installClaudeCodeFn = func() (string, error) {
-	r, err := installer.InstallClaudeCodeSkill()
+var installClaudeCodeFn = func(name string) (string, error) {
+	r, err := installer.InstallClaudeCodeSkill(name)
 	return r.Destination, err
 }
 
-var installOpenCodeFn = func() (string, error) {
-	r, err := installer.InstallOpenCodeSkill()
+var installOpenCodeFn = func(name string) (string, error) {
+	r, err := installer.InstallOpenCodeSkill(name)
 	return r.Destination, err
 }
 
@@ -34,6 +34,13 @@ var removeAutostartFn = func() (string, error) {
 }
 
 // cmdSetup routes the setup subcommand arguments to the appropriate installer function.
+//
+// Usage:
+//
+//	engram-ui setup claude-code <skill>
+//	engram-ui setup opencode <skill>
+//	engram-ui setup os-autostart
+//	engram-ui setup remove-autostart
 func cmdSetup(args []string) int {
 	if len(args) == 0 {
 		fmt.Fprintf(stderr, "engram-ui setup: missing target\n")
@@ -43,18 +50,30 @@ func cmdSetup(args []string) int {
 
 	switch args[0] {
 	case "claude-code":
-		dest, err := installClaudeCodeFn()
+		if len(args) < 2 {
+			fmt.Fprintf(stderr, "engram-ui setup claude-code: missing skill name\n")
+			printSetupUsage()
+			return 2
+		}
+		skill := args[1]
+		dest, err := installClaudeCodeFn(skill)
 		if err != nil {
-			fmt.Fprintf(stderr, "engram-ui setup claude-code: %v\n", err)
+			fmt.Fprintf(stderr, "engram-ui setup claude-code %s: %v\n", skill, err)
 			return 1
 		}
 		fmt.Fprintf(stdout, "installed: %s\n", dest)
 		return 0
 
 	case "opencode":
-		dest, err := installOpenCodeFn()
+		if len(args) < 2 {
+			fmt.Fprintf(stderr, "engram-ui setup opencode: missing skill name\n")
+			printSetupUsage()
+			return 2
+		}
+		skill := args[1]
+		dest, err := installOpenCodeFn(skill)
 		if err != nil {
-			fmt.Fprintf(stderr, "engram-ui setup opencode: %v\n", err)
+			fmt.Fprintf(stderr, "engram-ui setup opencode %s: %v\n", skill, err)
 			return 1
 		}
 		fmt.Fprintf(stdout, "installed: %s\n", dest)
@@ -90,11 +109,13 @@ func cmdSetup(args []string) int {
 }
 
 func printSetupUsage() {
-	fmt.Fprintln(stderr, `Usage: engram-ui setup <target>
+	fmt.Fprintln(stderr, `Usage: engram-ui setup <target> [args]
 
 Targets:
-  claude-code        install engram-conventions skill for Claude Code
-  opencode           install engram-conventions skill for OpenCode
-  os-autostart       register engram-ui as an OS autostart entry
-  remove-autostart   remove the OS autostart entry`)
+  claude-code <skill>    install the named skill for Claude Code
+  opencode <skill>       install the named skill for OpenCode
+  os-autostart           register engram-ui as an OS autostart entry
+  remove-autostart       remove the OS autostart entry
+
+Available skills are discovered via the embedded catalog.`)
 }

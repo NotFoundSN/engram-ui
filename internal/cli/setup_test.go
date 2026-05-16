@@ -34,15 +34,29 @@ func TestCmdSetup_UnknownTarget(t *testing.T) {
 	}
 }
 
+func TestCmdSetup_ClaudeCode_MissingSkill(t *testing.T) {
+	var buf bytes.Buffer
+	origStderr := stderr
+	stderr = &buf
+	defer func() { stderr = origStderr }()
+
+	code := cmdSetup([]string{"claude-code"})
+	if code != 2 {
+		t.Errorf("cmdSetup([claude-code]) without skill = %d, want 2", code)
+	}
+	if !strings.Contains(buf.String(), "missing skill name") {
+		t.Errorf("expected 'missing skill name' in stderr, got: %q", buf.String())
+	}
+}
+
 func TestCmdSetup_ClaudeCode(t *testing.T) {
-	// Inject stub installer.
 	origInstallClaude := installClaudeCodeFn
 	defer func() { installClaudeCodeFn = origInstallClaude }()
 
-	called := false
-	installClaudeCodeFn = func() (string, error) {
-		called = true
-		return "/fake/.claude/skills/engram-conventions", nil
+	var calledWith string
+	installClaudeCodeFn = func(name string) (string, error) {
+		calledWith = name
+		return "/fake/.claude/skills/" + name, nil
 	}
 
 	var buf bytes.Buffer
@@ -50,15 +64,27 @@ func TestCmdSetup_ClaudeCode(t *testing.T) {
 	stdout = &buf
 	defer func() { stdout = origStdout }()
 
-	code := cmdSetup([]string{"claude-code"})
+	code := cmdSetup([]string{"claude-code", "brainstorm"})
 	if code != 0 {
-		t.Errorf("cmdSetup([claude-code]) = %d, want 0", code)
+		t.Errorf("cmdSetup([claude-code brainstorm]) = %d, want 0", code)
 	}
-	if !called {
-		t.Error("cmdSetup([claude-code]): installClaudeCodeFn not called")
+	if calledWith != "brainstorm" {
+		t.Errorf("installClaudeCodeFn called with %q, want %q", calledWith, "brainstorm")
 	}
-	if !strings.Contains(buf.String(), "/fake/.claude/skills/engram-conventions") {
-		t.Errorf("cmdSetup([claude-code]) stdout %q should contain destination path", buf.String())
+	if !strings.Contains(buf.String(), "/fake/.claude/skills/brainstorm") {
+		t.Errorf("cmdSetup stdout %q should contain destination path", buf.String())
+	}
+}
+
+func TestCmdSetup_OpenCode_MissingSkill(t *testing.T) {
+	var buf bytes.Buffer
+	origStderr := stderr
+	stderr = &buf
+	defer func() { stderr = origStderr }()
+
+	code := cmdSetup([]string{"opencode"})
+	if code != 2 {
+		t.Errorf("cmdSetup([opencode]) without skill = %d, want 2", code)
 	}
 }
 
@@ -66,10 +92,10 @@ func TestCmdSetup_OpenCode(t *testing.T) {
 	origInstallOpenCode := installOpenCodeFn
 	defer func() { installOpenCodeFn = origInstallOpenCode }()
 
-	called := false
-	installOpenCodeFn = func() (string, error) {
-		called = true
-		return "/fake/.config/opencode/skills/engram-conventions", nil
+	var calledWith string
+	installOpenCodeFn = func(name string) (string, error) {
+		calledWith = name
+		return "/fake/.config/opencode/skills/" + name, nil
 	}
 
 	var buf bytes.Buffer
@@ -77,12 +103,12 @@ func TestCmdSetup_OpenCode(t *testing.T) {
 	stdout = &buf
 	defer func() { stdout = origStdout }()
 
-	code := cmdSetup([]string{"opencode"})
+	code := cmdSetup([]string{"opencode", "brainstorm"})
 	if code != 0 {
-		t.Errorf("cmdSetup([opencode]) = %d, want 0", code)
+		t.Errorf("cmdSetup([opencode brainstorm]) = %d, want 0", code)
 	}
-	if !called {
-		t.Error("cmdSetup([opencode]): installOpenCodeFn not called")
+	if calledWith != "brainstorm" {
+		t.Errorf("installOpenCodeFn called with %q, want %q", calledWith, "brainstorm")
 	}
 }
 
@@ -114,7 +140,7 @@ func TestCmdSetup_ClaudeCode_Error(t *testing.T) {
 	origInstallClaude := installClaudeCodeFn
 	defer func() { installClaudeCodeFn = origInstallClaude }()
 
-	installClaudeCodeFn = func() (string, error) {
+	installClaudeCodeFn = func(name string) (string, error) {
 		return "", fmt.Errorf("permission denied")
 	}
 
@@ -123,9 +149,9 @@ func TestCmdSetup_ClaudeCode_Error(t *testing.T) {
 	stderr = &buf
 	defer func() { stderr = origStderr }()
 
-	code := cmdSetup([]string{"claude-code"})
+	code := cmdSetup([]string{"claude-code", "brainstorm"})
 	if code != 1 {
-		t.Errorf("cmdSetup([claude-code] with error) = %d, want 1", code)
+		t.Errorf("cmdSetup([claude-code brainstorm] with error) = %d, want 1", code)
 	}
 }
 
@@ -153,7 +179,7 @@ func TestCmdSetup_RemoveAutostart_NotRegistered(t *testing.T) {
 	defer func() { removeAutostartFn = origRemoveAutostart }()
 
 	removeAutostartFn = func() (string, error) {
-		return "", nil // empty dest = not registered
+		return "", nil
 	}
 
 	var buf bytes.Buffer
