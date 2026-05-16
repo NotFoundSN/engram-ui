@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/Gentleman-Programming/engram-ui/internal/client"
 	"github.com/Gentleman-Programming/engram-ui/internal/render"
@@ -15,7 +16,45 @@ func backOrRoot(back string) string {
 	return back
 }
 
-templ ObservationDetail(o *client.Observation, renderMD bool, back string) {
+// hasSlash reports whether the topic_key contains at least one `/`.
+// Used by the clickable topic_key meta-row — strip-last-segment is undefined
+// for 1-segment keys, so they render as plain text.
+func hasSlash(topicKey string) bool {
+	for i := 0; i < len(topicKey); i++ {
+		if topicKey[i] == '/' {
+			return true
+		}
+	}
+	return false
+}
+
+// topicKeyPrefixLink builds /p/{project}?topic_key_prefix={strip-last-segment}.
+// Assumes topicKey contains at least one `/` (caller must guard).
+func topicKeyPrefixLink(project, topicKey string) string {
+	last := -1
+	for i := 0; i < len(topicKey); i++ {
+		if topicKey[i] == '/' {
+			last = i
+		}
+	}
+	prefix := topicKey[:last+1]
+	return "/p/" + project + "?topic_key_prefix=" + url.QueryEscape(prefix)
+}
+
+// siblingHref builds /m/{id}?from=/p/{project}?topic_key_prefix={prefix} so
+// the back link from a sibling preserves the prefix-filtered project view.
+func siblingHref(siblingID int64, project, prefix string) string {
+	if project == "" {
+		return fmt.Sprintf("/m/%d", siblingID)
+	}
+	src := "/p/" + project
+	if prefix != "" {
+		src += "?topic_key_prefix=" + url.QueryEscape(prefix)
+	}
+	return fmt.Sprintf("/m/%d?from=%s", siblingID, url.QueryEscape(src))
+}
+
+templ ObservationDetail(o *client.Observation, renderMD bool, back string, siblings []client.Observation, siblingsPrefix string, hasMoreSiblings bool) {
 	@Layout(o.Title) {
 		<a href={ templ.SafeURL(backOrRoot(back)) } class="mb-6 inline-block text-xs text-slate-500 hover:text-slate-300">← back</a>
 		<article class="rounded-lg border border-slate-800 bg-slate-900/40 p-6">
@@ -36,7 +75,7 @@ templ ObservationDetail(o *client.Observation, renderMD bool, back string) {
 					@metaRow("Project", *o.Project)
 				}
 				if o.TopicKey != nil {
-					@metaRow("Topic key", *o.TopicKey)
+					@topicKeyMetaRow(*o.TopicKey, o.Project)
 				}
 				if o.ToolName != nil {
 					@metaRow("Tool", *o.ToolName)
@@ -45,6 +84,9 @@ templ ObservationDetail(o *client.Observation, renderMD bool, back string) {
 					@metaRow("Revisions", fmt.Sprintf("%d", o.RevisionCount))
 				}
 			</dl>
+			if len(siblings) > 1 {
+				@siblingsSection(o.ID, siblings, siblingsPrefix, hasMoreSiblings, o.Project)
+			}
 			if renderMD {
 				<div class="prose prose-invert prose-sm max-w-none rounded-md bg-slate-950 p-4 prose-headings:text-slate-100 prose-code:text-emerald-200 prose-a:text-emerald-300">
 					@templ.Raw(render.Markdown(o.Content))
@@ -54,6 +96,84 @@ templ ObservationDetail(o *client.Observation, renderMD bool, back string) {
 			}
 		</article>
 	}
+}
+
+templ siblingsSection(currentID int64, siblings []client.Observation, prefix string, hasMore bool, project *string) {
+	<section id="siblings-section" class="mb-6 rounded-md border border-slate-800 bg-slate-900/30 p-4">
+		<header class="mb-2 text-xs text-slate-500">
+			Siblings under <span class="font-mono text-slate-300">{ prefix }</span>
+		</header>
+		<details>
+			<summary class="cursor-pointer list-none">
+				<div class="flex items-center gap-2">
+					@currentSiblingInline(siblings, currentID)
+					<span class="ml-2 shrink-0 text-[10px] text-emerald-300 hover:text-emerald-200">▶ show others</span>
+				</div>
+			</summary>
+			<ul class="mt-3 space-y-1.5">
+				for _, sib := range siblings {
+					if sib.ID != currentID {
+						@siblingRow(sib, currentID, prefix, project)
+					}
+				}
+			</ul>
+			if hasMore && project != nil {
+				<a href={ templ.SafeURL("/p/" + *project + "?topic_key_prefix=" + url.QueryEscape(prefix)) } class="mt-3 inline-block text-xs text-emerald-300 hover:text-emerald-200">see all →</a>
+			}
+		</details>
+	</section>
+}
+
+templ currentSiblingInline(siblings []client.Observation, currentID int64) {
+	for _, sib := range siblings {
+		if sib.ID == currentID {
+			<div class="flex flex-1 items-center gap-2 rounded px-2 py-1 text-xs text-slate-400">
+				<span class="shrink-0 rounded bg-slate-700/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-slate-300">{ sib.Type }</span>
+				<span class="truncate">{ sib.Title }</span>
+				<span class="ml-auto shrink-0 rounded-full border border-emerald-400/60 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-emerald-200">current</span>
+			</div>
+		}
+	}
+}
+
+templ siblingRow(sib client.Observation, currentID int64, prefix string, project *string) {
+	if sib.ID == currentID {
+		<li class="flex items-center gap-2 rounded px-2 py-1 text-xs text-slate-400">
+			<span class="shrink-0 rounded bg-slate-700/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-slate-300">{ sib.Type }</span>
+			<span class="truncate">{ sib.Title }</span>
+			<span class="ml-auto shrink-0 rounded-full border border-emerald-400/60 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-emerald-200">current</span>
+		</li>
+	} else {
+		<li>
+			if project != nil {
+				<a href={ templ.SafeURL(siblingHref(sib.ID, *project, prefix)) } class="flex items-center gap-2 rounded px-2 py-1 text-xs text-slate-300 hover:bg-slate-800/60 hover:text-slate-100">
+					<span class="shrink-0 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-slate-300">{ sib.Type }</span>
+					<span class="truncate">{ sib.Title }</span>
+				</a>
+			} else {
+				<a href={ templ.SafeURL(fmt.Sprintf("/m/%d", sib.ID)) } class="flex items-center gap-2 rounded px-2 py-1 text-xs text-slate-300 hover:bg-slate-800/60 hover:text-slate-100">
+					<span class="shrink-0 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-slate-300">{ sib.Type }</span>
+					<span class="truncate">{ sib.Title }</span>
+				</a>
+			}
+		</li>
+	}
+}
+
+// topicKeyMetaRow renders the topic_key meta-row. If the key has ≥1 slash,
+// the value is wrapped in a clickable link pointing to the project view
+// filtered by the strip-last-segment prefix.
+templ topicKeyMetaRow(topicKey string, project *string) {
+	<div>
+		<dt class="text-slate-500">Topic key</dt>
+		<dd class="font-mono text-slate-200">
+			if project != nil && topicKey != "" && hasSlash(topicKey) {
+				<a href={ templ.SafeURL(topicKeyPrefixLink(*project, topicKey)) } class="hover:text-emerald-300">{ topicKey }</a>
+			} else {
+				{ topicKey }
+			}
+		</dd>
+	</div>
 }
 
 templ viewToggle(id int64, renderMD bool) {

@@ -358,6 +358,160 @@ func TestHandleProject_SortGarbage(t *testing.T) {
 
 // --- handleProject tests (with q) ---
 
+func TestHandleProject_TopicKeyPrefixFilter(t *testing.T) {
+	// ?topic_key_prefix=sdd/auth/ should narrow the list to observations
+	// whose topic_key starts with that prefix. Observations without a
+	// matching prefix (or no topic_key at all) are filtered out.
+	k1, k2, k3 := "sdd/auth/spec", "sdd/auth/design", "decision/cookie-vs-localstorage"
+	obs := []client.Observation{
+		{ID: 1, Type: "spec", Title: "Auth Spec", Content: "c", CreatedAt: "2026-01-01", TopicKey: &k1},
+		{ID: 2, Type: "design", Title: "Auth Design", Content: "c", CreatedAt: "2026-01-02", TopicKey: &k2},
+		{ID: 3, Type: "decision", Title: "Other Decision", Content: "c", CreatedAt: "2026-01-03", TopicKey: &k3},
+		{ID: 4, Type: "discovery", Title: "No Key Obs", Content: "c", CreatedAt: "2026-01-04"},
+	}
+	stub := &stubEngramClient{
+		statsOut:  &client.Stats{Projects: []string{"alpha"}},
+		recentOut: obs,
+	}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/p/alpha?topic_key_prefix=sdd/auth/", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+
+	if !strings.Contains(body, "Auth Spec") {
+		t.Error("expected 'Auth Spec' in filtered body (matches prefix)")
+	}
+	if !strings.Contains(body, "Auth Design") {
+		t.Error("expected 'Auth Design' in filtered body (matches prefix)")
+	}
+	if strings.Contains(body, "Other Decision") {
+		t.Error("'Other Decision' must be filtered out (different prefix)")
+	}
+	if strings.Contains(body, "No Key Obs") {
+		t.Error("observation without topic_key must be filtered out when prefix is active")
+	}
+}
+
+func TestHandleProject_TopicKeyPrefixPreservedInForms(t *testing.T) {
+	// When ?topic_key_prefix= is active, every filter form on the page must
+	// carry it as a hidden input so submitting one form does not drop the
+	// active prefix filter.
+	k := "sdd/auth/spec"
+	obs := []client.Observation{
+		{ID: 1, Type: "spec", Title: "Auth Spec", Content: "c", CreatedAt: "2026-01-01", TopicKey: &k},
+	}
+	stub := &stubEngramClient{
+		statsOut:  &client.Stats{Projects: []string{"alpha"}},
+		recentOut: obs,
+	}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/p/alpha?topic_key_prefix=sdd/auth/", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+
+	// At least one hidden input with the prefix value must exist on the page.
+	// The hidden input must appear at least 3 times (once per form: search,
+	// sort, type filter). Counting >=3 is sufficient since the page renders
+	// all three forms when not in search mode.
+	needle := `type="hidden" name="topic_key_prefix" value="sdd/auth/"`
+	count := strings.Count(body, needle)
+	if count < 3 {
+		t.Errorf("expected hidden topic_key_prefix input in 3 forms; found %d occurrences of %q", count, needle)
+	}
+}
+
+func TestHandleProject_ActivePrefixChipRendered(t *testing.T) {
+	// When ?topic_key_prefix= is active, the page shows a visible chip
+	// containing the prefix and a clear link that drops it.
+	k := "sdd/auth/spec"
+	stub := &stubEngramClient{
+		statsOut: &client.Stats{Projects: []string{"alpha"}},
+		recentOut: []client.Observation{
+			{ID: 10, Type: "spec", Title: "Auth Spec", Content: "c", CreatedAt: "2026-01-01", TopicKey: &k},
+		},
+	}
+	s := newWithClient(stub)
+	req := httptest.NewRequest(http.MethodGet, "/p/alpha?topic_key_prefix=sdd/auth/", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+
+	// The chip element must contain the prefix value visible to the user.
+	if !strings.Contains(body, `id="prefix-chip"`) {
+		t.Error(`expected id="prefix-chip" in body when ?topic_key_prefix= is active`)
+	}
+	if !strings.Contains(body, "sdd/auth/") {
+		t.Error("expected prefix value 'sdd/auth/' visible in chip body")
+	}
+
+	// Clear link must point to /p/alpha (no prefix). Use chip id as anchor.
+	chipIdx := strings.Index(body, `id="prefix-chip"`)
+	if chipIdx == -1 {
+		t.Fatal("could not locate chip in body")
+	}
+	// Find next 200 chars after chip to look for clear link
+	tail := body[chipIdx:]
+	if !strings.Contains(tail[:min(len(tail), 500)], `href="/p/alpha"`) {
+		t.Error("expected clear link href=/p/alpha inside or near the chip")
+	}
+}
+
+func TestHandleProject_NoChipWhenPrefixInactive(t *testing.T) {
+	// Without ?topic_key_prefix=, no chip should render.
+	stub := &stubEngramClient{
+		statsOut: &client.Stats{Projects: []string{"alpha"}},
+		recentOut: []client.Observation{
+			{ID: 1, Type: "decision", Title: "Some Dec", Content: "c", CreatedAt: "2026-01-01"},
+		},
+	}
+	s := newWithClient(stub)
+	req := httptest.NewRequest(http.MethodGet, "/p/alpha", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+	if strings.Contains(body, `id="prefix-chip"`) {
+		t.Error(`prefix-chip must NOT render when topic_key_prefix is empty`)
+	}
+}
+
+func TestHandleProject_RowsHaveFromWithTopicKeyPrefix(t *testing.T) {
+	// Observation row hrefs must embed ?from= URL that includes the active
+	// topic_key_prefix, so back-link from detail preserves the filter view.
+	k := "sdd/auth/spec"
+	stub := &stubEngramClient{
+		statsOut: &client.Stats{Projects: []string{"alpha"}},
+		recentOut: []client.Observation{
+			{ID: 10, Type: "spec", Title: "Auth Spec", Content: "c", CreatedAt: "2026-01-01", TopicKey: &k},
+		},
+	}
+	s := newWithClient(stub)
+	req := httptest.NewRequest(http.MethodGet, "/p/alpha?topic_key_prefix=sdd/auth/", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+	// /p/alpha?topic_key_prefix=sdd/auth/ → encoded = %2Fp%2Falpha%3Ftopic_key_prefix%3Dsdd%252Fauth%252F
+	// Detail link should contain ?from= with the encoded source URL.
+	want := "topic_key_prefix"
+	if !strings.Contains(body, want) {
+		t.Errorf("expected %q in ?from= attribute of row hrefs", want)
+	}
+}
+
 func TestHandleProject_SearchPath(t *testing.T) {
 	searchResults := []client.SearchResult{
 		{Observation: client.Observation{ID: 5, Type: "decision", Title: "Auth flow", Content: "c", CreatedAt: "2026-01-01"}, Rank: 1.0},
@@ -817,6 +971,295 @@ func TestHandleObservation_RendersOK(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), "Test Obs") {
 		t.Error("expected observation title in body")
+	}
+}
+
+// siblingsStub builds an engramClient stub where Observation(id) returns the
+// matching one in the observations slice (by ID), and RecentObservations
+// returns all of them. Useful for testing the siblings fetch path.
+type siblingsStub struct {
+	stubEngramClient
+	observations []client.Observation
+}
+
+func (s *siblingsStub) Observation(id int64) (*client.Observation, error) {
+	for i := range s.observations {
+		if s.observations[i].ID == id {
+			return &s.observations[i], nil
+		}
+	}
+	return nil, fmt.Errorf("not found")
+}
+
+func (s *siblingsStub) RecentObservations(opts client.RecentOptions) ([]client.Observation, error) {
+	return s.observations, nil
+}
+
+func TestHandleObservation_SiblingsRenderedWhenTopicKeyHasTwoSlashes(t *testing.T) {
+	// Current obs is sdd/auth/spec — has 2 slashes → prefix = sdd/auth/
+	// Three sibling-rule candidates: spec, design, tasks → all should appear.
+	// Plus one unrelated obs (decision/X) → must NOT appear.
+	proj := "alpha"
+	k1, k2, k3, k4 := "sdd/auth/spec", "sdd/auth/design", "sdd/auth/tasks", "decision/x"
+	obs := []client.Observation{
+		{ID: 10, Type: "spec", Title: "Auth Spec", Content: "c", CreatedAt: "2026-01-01", TopicKey: &k1, Project: &proj},
+		{ID: 11, Type: "design", Title: "Auth Design", Content: "c", CreatedAt: "2026-01-02", TopicKey: &k2, Project: &proj},
+		{ID: 12, Type: "tasks", Title: "Auth Tasks", Content: "c", CreatedAt: "2026-01-03", TopicKey: &k3, Project: &proj},
+		{ID: 99, Type: "decision", Title: "Other Decision", Content: "c", CreatedAt: "2026-01-04", TopicKey: &k4, Project: &proj},
+	}
+	stub := &siblingsStub{observations: obs}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/observations/10", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+
+	// Siblings section must be present.
+	if !strings.Contains(body, `id="siblings-section"`) {
+		t.Error(`expected id="siblings-section" in body when topic_key has ≥2 slashes`)
+	}
+	// All three sibling titles must appear.
+	for _, want := range []string{"Auth Spec", "Auth Design", "Auth Tasks"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("expected sibling title %q in body", want)
+		}
+	}
+	// Unrelated obs must NOT appear in the siblings section.
+	// (We assert it's not in the body at all — it isn't the current obs either.)
+	if strings.Contains(body, "Other Decision") {
+		t.Error("'Other Decision' (different prefix) must NOT appear in siblings")
+	}
+}
+
+func TestHandleObservation_NoSiblingsSectionWhenTopicKeyHasOneSlash(t *testing.T) {
+	// Current obs is decision/cookies (1 slash) → no siblings section.
+	proj := "alpha"
+	k := "decision/cookies"
+	obs := []client.Observation{
+		{ID: 5, Type: "decision", Title: "Cookies Decision", Content: "c", CreatedAt: "2026-01-01", TopicKey: &k, Project: &proj},
+	}
+	stub := &siblingsStub{observations: obs}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/observations/5", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+	if strings.Contains(body, `id="siblings-section"`) {
+		t.Error("siblings section must NOT render when topic_key has <2 slashes")
+	}
+}
+
+func TestHandleObservation_NoSiblingsSectionWhenTopicKeyNil(t *testing.T) {
+	// Obs with no topic_key → no siblings section.
+	proj := "alpha"
+	obs := []client.Observation{
+		{ID: 7, Type: "discovery", Title: "Nameless", Content: "c", CreatedAt: "2026-01-01", Project: &proj},
+	}
+	stub := &siblingsStub{observations: obs}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/observations/7", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+	if strings.Contains(body, `id="siblings-section"`) {
+		t.Error("siblings section must NOT render when topic_key is nil")
+	}
+}
+
+func TestHandleObservation_SiblingsSortedByCreatedAtAsc(t *testing.T) {
+	// proposal (date_1) → spec (date_2) → design (date_3) in chronological order.
+	// Even when fetched in random order, the rendered list must be asc.
+	proj := "alpha"
+	k1, k2, k3 := "sdd/auth/proposal", "sdd/auth/spec", "sdd/auth/design"
+	obs := []client.Observation{
+		// Inserted out of order intentionally.
+		{ID: 12, Type: "design", Title: "Auth Design", Content: "c", CreatedAt: "2026-01-03", TopicKey: &k3, Project: &proj},
+		{ID: 10, Type: "proposal", Title: "Auth Proposal", Content: "c", CreatedAt: "2026-01-01", TopicKey: &k1, Project: &proj},
+		{ID: 11, Type: "spec", Title: "Auth Spec", Content: "c", CreatedAt: "2026-01-02", TopicKey: &k2, Project: &proj},
+	}
+	stub := &siblingsStub{observations: obs}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/observations/11", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+	// Scope the order check to the siblings section <ul> (the non-current
+	// siblings list). The current obs is pinned to the top via <summary>
+	// so its position in the section is not part of the asc check.
+	sectionStart := strings.Index(body, `id="siblings-section"`)
+	if sectionStart == -1 {
+		t.Fatal(`expected id="siblings-section" in body`)
+	}
+	sectionEnd := strings.Index(body[sectionStart:], "</section>")
+	if sectionEnd == -1 {
+		t.Fatal("could not find </section> closing tag")
+	}
+	siblingsBlock := body[sectionStart : sectionStart+sectionEnd]
+
+	// The non-current siblings inside the <ul> must be sorted asc:
+	// proposal (2026-01-01) before design (2026-01-03).
+	pProposal := strings.Index(siblingsBlock, "Auth Proposal")
+	pDesign := strings.Index(siblingsBlock, "Auth Design")
+	if pProposal == -1 || pDesign == -1 {
+		t.Fatalf("missing non-current siblings within section: proposal=%d, design=%d", pProposal, pDesign)
+	}
+	if !(pProposal < pDesign) {
+		t.Errorf("non-current siblings not sorted asc by created_at: proposal@%d, design@%d", pProposal, pDesign)
+	}
+}
+
+func TestHandleObservation_CurrentObsMarkedInSiblings(t *testing.T) {
+	// The current obs appears in its own siblings list, marked with a badge.
+	proj := "alpha"
+	k1, k2 := "sdd/auth/spec", "sdd/auth/design"
+	obs := []client.Observation{
+		{ID: 10, Type: "spec", Title: "Auth Spec", Content: "c", CreatedAt: "2026-01-01", TopicKey: &k1, Project: &proj},
+		{ID: 11, Type: "design", Title: "Auth Design", Content: "c", CreatedAt: "2026-01-02", TopicKey: &k2, Project: &proj},
+	}
+	stub := &siblingsStub{observations: obs}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/observations/10", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+	// The current obs must have a "current" badge.
+	if !strings.Contains(body, "current") {
+		t.Error(`expected "current" badge near current obs in siblings list`)
+	}
+}
+
+func TestHandleObservation_SiblingsCollapsedByDefault(t *testing.T) {
+	// Siblings section must be wrapped in a <details> element WITHOUT the
+	// `open` attribute, so the list is collapsed by default. Only the
+	// current row (in <summary>) is visible until the user clicks.
+	proj := "alpha"
+	k1, k2 := "sdd/auth/spec", "sdd/auth/design"
+	obs := []client.Observation{
+		{ID: 10, Type: "spec", Title: "Auth Spec", Content: "c", CreatedAt: "2026-01-01", TopicKey: &k1, Project: &proj},
+		{ID: 11, Type: "design", Title: "Auth Design", Content: "c", CreatedAt: "2026-01-02", TopicKey: &k2, Project: &proj},
+	}
+	stub := &siblingsStub{observations: obs}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/observations/10", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+
+	// Scope to the siblings section.
+	sectionStart := strings.Index(body, `id="siblings-section"`)
+	if sectionStart == -1 {
+		t.Fatal(`expected id="siblings-section" in body`)
+	}
+	sectionEnd := strings.Index(body[sectionStart:], "</section>")
+	siblingsBlock := body[sectionStart : sectionStart+sectionEnd]
+
+	// Must contain <details> and <summary> elements.
+	if !strings.Contains(siblingsBlock, "<details") {
+		t.Error("expected <details> element inside siblings section")
+	}
+	if !strings.Contains(siblingsBlock, "<summary") {
+		t.Error("expected <summary> element inside siblings section")
+	}
+	// The <details> tag must NOT carry the `open` attribute (collapsed by default).
+	// Match any of: `<details>`, `<details class=`, etc., but reject `<details open`.
+	if strings.Contains(siblingsBlock, "<details open") {
+		t.Error("siblings <details> must NOT be open by default (collapsed expected)")
+	}
+}
+
+func TestHandleObservation_SiblingsSectionHiddenWhenOnlyCurrent(t *testing.T) {
+	// Only the current obs has the topic_key_prefix → nothing to navigate to.
+	// The entire siblings section must NOT render.
+	proj := "alpha"
+	k := "sdd/lonely/spec"
+	obs := []client.Observation{
+		{ID: 20, Type: "spec", Title: "Lonely Spec", Content: "c", CreatedAt: "2026-01-01", TopicKey: &k, Project: &proj},
+	}
+	stub := &siblingsStub{observations: obs}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/observations/20", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+	if strings.Contains(body, `id="siblings-section"`) {
+		t.Error("siblings section must NOT render when only the current obs matches the prefix")
+	}
+}
+
+func TestHandleObservation_TopicKeyMetaRowClickable(t *testing.T) {
+	// In the detail view, topic_key with ≥1 slash must render as a clickable
+	// link to the project view filtered by strip-last-segment prefix.
+	proj := "alpha"
+	k := "sdd/auth/spec"
+	stub := &siblingsStub{
+		observations: []client.Observation{
+			{ID: 10, Type: "spec", Title: "Auth Spec", Content: "c", CreatedAt: "2026-01-01", TopicKey: &k, Project: &proj},
+		},
+	}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/observations/10", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+	want := `href="/p/alpha?topic_key_prefix=sdd%2Fauth%2F"`
+	if !strings.Contains(body, want) {
+		t.Errorf("expected topic_key meta-row link %q in body", want)
+	}
+}
+
+func TestHandleObservation_TopicKeyMetaRowNotClickableWhenNoSlash(t *testing.T) {
+	// Single-segment topic_key (no slash) → no strip-last possible → plain text.
+	proj := "alpha"
+	k := "scratchpad"
+	stub := &siblingsStub{
+		observations: []client.Observation{
+			{ID: 11, Type: "discovery", Title: "Scratch", Content: "c", CreatedAt: "2026-01-01", TopicKey: &k, Project: &proj},
+		},
+	}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/observations/11", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+	if strings.Contains(body, `?topic_key_prefix=`) {
+		t.Error("topic_key with no slash must NOT render as a prefix link")
+	}
+}
+
+func TestHandleObservation_ShortAliasRoute(t *testing.T) {
+	// /m/{id} is an additive alias for /observations/{id} (same handler).
+	// Web links keep using the long form; the short form is for agent emission.
+	s := newWithClient(makeObsStub(42))
+	req := httptest.NewRequest(http.MethodGet, "/m/42", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /m/42 alias, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "Test Obs") {
+		t.Error("expected observation title in body via /m/ alias")
 	}
 }
 

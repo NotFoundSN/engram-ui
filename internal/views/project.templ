@@ -17,20 +17,24 @@ type ProjectData struct {
 	SortExplicit   bool   // v2: true iff ?sort= was present in the request
 	IsSearch       bool   // true when Query != ""
 	SourceURL      string // v2: unescaped URL to embed as ?from= in observation row links
+	TopicKeyPrefix string // v5: active topic_key_prefix filter (empty when not filtering by prefix)
 }
 
 templ Project(d ProjectData) {
 	@Layout(d.Project) {
 		@projectHeader(d.Project)
 		<div class="mb-6 flex flex-wrap items-start gap-4">
-			@searchForm(d.Project, d.Query, d.ActiveType, d.Sort)
+			@searchForm(d.Project, d.Query, d.ActiveType, d.Sort, d.TopicKeyPrefix)
 			if !d.IsSearch {
-				@sortForm(d.Project, d.Query, d.ActiveType, d.Sort)
+				@sortForm(d.Project, d.Query, d.ActiveType, d.Sort, d.TopicKeyPrefix)
 			}
 		</div>
 		<div class="mb-4">
-			@projectTypeFilter(d.Project, d.AvailableTypes, d.ActiveType, d.Query, d.Sort, d.SortExplicit)
+			@projectTypeFilter(d.Project, d.AvailableTypes, d.ActiveType, d.Query, d.Sort, d.SortExplicit, d.TopicKeyPrefix)
 		</div>
+		if d.TopicKeyPrefix != "" {
+			@activePrefixChip(d.Project, d.TopicKeyPrefix, d.ActiveType, d.Query, d.Sort)
+		}
 		if len(d.Observations) == 0 {
 			@emptyProject()
 		} else {
@@ -46,7 +50,7 @@ templ projectHeader(project string) {
 	</div>
 }
 
-templ searchForm(project, q, activeType, sort string) {
+templ searchForm(project, q, activeType, sort, topicKeyPrefix string) {
 	<form method="get" action={ templ.SafeURL(fmt.Sprintf("/p/%s", project)) } class="flex items-center gap-2">
 		<label for="q" class="sr-only">Search observations</label>
 		<input
@@ -64,20 +68,23 @@ templ searchForm(project, q, activeType, sort string) {
 		if sort != "" && sort != "date_desc" {
 			<input type="hidden" name="sort" value={ sort }/>
 		}
+		if topicKeyPrefix != "" {
+			<input type="hidden" name="topic_key_prefix" value={ topicKeyPrefix }/>
+		}
 		<button
 			type="submit"
 			class="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-300 hover:border-slate-600 hover:text-slate-100"
 		>Search</button>
 		if q != "" {
 			<a
-				href={ templ.SafeURL(projectFilterHref(project, activeType, "", sort)) }
+				href={ templ.SafeURL(projectFilterHref(project, activeType, "", sort, topicKeyPrefix)) }
 				class="text-xs text-slate-500 hover:text-slate-300"
 			>Clear</a>
 		}
 	</form>
 }
 
-templ sortForm(project, q, activeType, sort string) {
+templ sortForm(project, q, activeType, sort, topicKeyPrefix string) {
 	<form method="get" action={ templ.SafeURL(fmt.Sprintf("/p/%s", project)) } class="flex items-center gap-2">
 		<label for="sort" class="text-xs text-slate-500">Sort</label>
 		<select
@@ -95,6 +102,9 @@ templ sortForm(project, q, activeType, sort string) {
 		if q != "" {
 			<input type="hidden" name="q" value={ q }/>
 		}
+		if topicKeyPrefix != "" {
+			<input type="hidden" name="topic_key_prefix" value={ topicKeyPrefix }/>
+		}
 		<button
 			type="submit"
 			class="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-300 hover:border-slate-600 hover:text-slate-100"
@@ -102,7 +112,7 @@ templ sortForm(project, q, activeType, sort string) {
 	</form>
 }
 
-templ projectTypeFilter(project string, options []string, activeType, q, sort string, sortExplicit bool) {
+templ projectTypeFilter(project string, options []string, activeType, q, sort string, sortExplicit bool, topicKeyPrefix string) {
 	<form method="get" action={ templ.SafeURL(fmt.Sprintf("/p/%s", project)) } class="flex items-center gap-2">
 		<label for="type-select" class="text-xs text-slate-500">Type</label>
 		<select
@@ -121,6 +131,9 @@ templ projectTypeFilter(project string, options []string, activeType, q, sort st
 		if sortExplicit && sort != "" {
 			<input type="hidden" name="sort" value={ sort }/>
 		}
+		if topicKeyPrefix != "" {
+			<input type="hidden" name="topic_key_prefix" value={ topicKeyPrefix }/>
+		}
 		<button
 			type="submit"
 			class="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-300 hover:border-slate-600 hover:text-slate-100"
@@ -136,6 +149,18 @@ templ observationList(obs []client.Observation, from string) {
 	</ul>
 }
 
+templ activePrefixChip(project, prefix, activeType, q, sort string) {
+	<div id="prefix-chip" class="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-200">
+		<span class="text-slate-400">topic_key prefix:</span>
+		<span class="font-mono">{ prefix }</span>
+		<a
+			href={ templ.SafeURL(projectFilterHref(project, activeType, q, sort, "")) }
+			class="ml-1 text-slate-400 hover:text-slate-200"
+			aria-label="Clear topic_key_prefix filter"
+		>×</a>
+	</div>
+}
+
 templ emptyProject() {
 	<p class="rounded-lg border border-dashed border-slate-800 p-6 text-center text-sm text-slate-500">
 		No observations to show for this project.
@@ -143,7 +168,7 @@ templ emptyProject() {
 }
 
 // projectFilterHref constructs a URL for /p/{project} preserving only non-empty params.
-func projectFilterHref(project, typ, q, sort string) string {
+func projectFilterHref(project, typ, q, sort, topicKeyPrefix string) string {
 	v := url.Values{}
 	if typ != "" {
 		v.Set("type", typ)
@@ -153,6 +178,9 @@ func projectFilterHref(project, typ, q, sort string) string {
 	}
 	if sort != "" && sort != "date_desc" {
 		v.Set("sort", sort)
+	}
+	if topicKeyPrefix != "" {
+		v.Set("topic_key_prefix", topicKeyPrefix)
 	}
 	base := fmt.Sprintf("/p/%s", project)
 	if len(v) == 0 {

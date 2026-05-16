@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -55,6 +56,8 @@ func (s *Server) routes() {
 	s.router.Get("/", s.handleHome)
 	s.router.Get("/p/{project}", s.handleProject)
 	s.router.Get("/observations/{id}", s.handleObservation)
+	// Short alias for agent emission — web templates keep using /observations/{id}.
+	s.router.Get("/m/{id}", s.handleObservation)
 	s.router.Get("/healthz", s.handleHealthz)
 }
 
@@ -121,6 +124,7 @@ func (s *Server) handleProject(w http.ResponseWriter, r *http.Request) {
 	project := chi.URLParam(r, "project")
 	q := r.URL.Query().Get("q")
 	activeType := r.URL.Query().Get("type")
+	topicKeyPrefix := r.URL.Query().Get("topic_key_prefix")
 	sortParam := r.URL.Query().Get("sort")
 	_, sortExplicit := r.URL.Query()["sort"] // track explicit presence before normalizing
 
@@ -164,9 +168,14 @@ func (s *Server) handleProject(w http.ResponseWriter, r *http.Request) {
 		observations = sortedObservations(observations, sortParam)
 	}
 
+	// Apply topic_key_prefix filter (works for both search and recent paths).
+	if topicKeyPrefix != "" {
+		observations = filterByTopicKeyPrefix(observations, topicKeyPrefix)
+	}
+
 	presentTypes := distinctTypes(observations)
 	typeOptions := unionTypes(engramconv.CanonicalTypes, presentTypes, activeType)
-	sourceURL := buildSourceURL(project, activeType, q, sortParam, sortExplicit)
+	sourceURL := buildSourceURL(project, activeType, q, sortParam, sortExplicit, topicKeyPrefix)
 
 	data := views.ProjectData{
 		Project:        project,
@@ -178,6 +187,7 @@ func (s *Server) handleProject(w http.ResponseWriter, r *http.Request) {
 		SortExplicit:   sortExplicit,
 		IsSearch:       isSearch,
 		SourceURL:      sourceURL,
+		TopicKeyPrefix: topicKeyPrefix,
 	}
 	_ = views.Project(data).Render(r.Context(), w)
 }
@@ -199,7 +209,60 @@ func (s *Server) handleObservation(w http.ResponseWriter, r *http.Request) {
 	renderMD := r.URL.Query().Get("raw") == ""
 	back := validateFrom(r.URL.Query().Get("from"))
 
-	_ = views.ObservationDetail(obs, renderMD, back).Render(r.Context(), w)
+	siblings, prefix, hasMore := s.computeSiblings(obs)
+
+	_ = views.ObservationDetail(obs, renderMD, back, siblings, prefix, hasMore).Render(r.Context(), w)
+}
+
+const siblingsCap = 20
+
+// computeSiblings applies the X+ rule: returns siblings only when the
+// observation's topic_key has ≥2 `/` (3+ segments). Returns the sibling slice
+// sorted by created_at asc, the prefix used for the lookup, and a hasMore
+// flag if more siblings exist beyond the cap.
+func (s *Server) computeSiblings(obs *client.Observation) ([]client.Observation, string, bool) {
+	if obs == nil || obs.TopicKey == nil {
+		return nil, "", false
+	}
+	topicKey := *obs.TopicKey
+	if strings.Count(topicKey, "/") < 2 {
+		return nil, "", false
+	}
+	// strip-last-segment prefix: everything up to and including the final `/`.
+	lastSlash := strings.LastIndex(topicKey, "/")
+	prefix := topicKey[:lastSlash+1]
+
+	project := ""
+	if obs.Project != nil {
+		project = *obs.Project
+	}
+	recent, err := s.client.RecentObservations(client.RecentOptions{
+		Project: project,
+		Limit:   200,
+	})
+	if err != nil {
+		return nil, prefix, false
+	}
+	// Filter by prefix.
+	matched := make([]client.Observation, 0, len(recent))
+	for _, o := range recent {
+		if o.TopicKey == nil {
+			continue
+		}
+		if strings.HasPrefix(*o.TopicKey, prefix) {
+			matched = append(matched, o)
+		}
+	}
+	// Sort by created_at asc.
+	sort.Slice(matched, func(i, j int) bool {
+		return matched[i].CreatedAt < matched[j].CreatedAt
+	})
+	// Cap at siblingsCap.
+	hasMore := len(matched) > siblingsCap
+	if hasMore {
+		matched = matched[:siblingsCap]
+	}
+	return matched, prefix, hasMore
 }
 
 func renderError(w http.ResponseWriter, r *http.Request, msg string, err error) {
@@ -214,6 +277,22 @@ func filterByType(obs []client.Observation, typ string) []client.Observation {
 	out := make([]client.Observation, 0, len(obs))
 	for _, o := range obs {
 		if o.Type == typ {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+func filterByTopicKeyPrefix(obs []client.Observation, prefix string) []client.Observation {
+	if prefix == "" {
+		return obs
+	}
+	out := make([]client.Observation, 0, len(obs))
+	for _, o := range obs {
+		if o.TopicKey == nil {
+			continue
+		}
+		if strings.HasPrefix(*o.TopicKey, prefix) {
 			out = append(out, o)
 		}
 	}

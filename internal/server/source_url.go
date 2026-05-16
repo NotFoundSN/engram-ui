@@ -15,9 +15,9 @@ import (
 //
 // The returned string is NOT percent-encoded — the caller applies
 // url.QueryEscape when embedding it into a ?from= attribute.
-func buildSourceURL(project, typ, q, sort string, sortExplicit bool) string {
+func buildSourceURL(project, typ, q, sort string, sortExplicit bool, topicKeyPrefix string) string {
 	base := "/p/" + project
-	parts := make([]string, 0, 3)
+	parts := make([]string, 0, 4)
 	if typ != "" {
 		parts = append(parts, "type="+url.QueryEscape(typ))
 	}
@@ -26,6 +26,9 @@ func buildSourceURL(project, typ, q, sort string, sortExplicit bool) string {
 	}
 	if sortExplicit && sort != "" {
 		parts = append(parts, "sort="+url.QueryEscape(sort))
+	}
+	if topicKeyPrefix != "" {
+		parts = append(parts, "topic_key_prefix="+url.QueryEscape(topicKeyPrefix))
 	}
 	if len(parts) == 0 {
 		return base
