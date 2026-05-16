@@ -6,18 +6,38 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/Gentleman-Programming/engram-ui/internal/tui"
 )
 
 // stdout and stderr are package-level writers, injectable for tests.
 var stdout io.Writer = os.Stdout
 var stderr io.Writer = os.Stderr
 
+// runTUIFn invokes the interactive TUI. Injectable for tests.
+var runTUIFn = tui.RunTUI
+
+// isInteractiveFn reports whether stdin is a terminal. Injectable for tests.
+var isInteractiveFn = isInteractive
+
 // Dispatch routes os.Args[1:] to the appropriate subcommand handler.
 // Returns the process exit code (0 = success, 1 = error, 2 = usage error).
+//
+// With zero arguments and an interactive stdin, dispatch launches the TUI
+// installer. In non-interactive contexts (piped input, autostart, CI),
+// dispatch prints help instead of auto-serving so scripted invocations
+// behave predictably. Use `engram-ui serve` explicitly to run the daemon.
 func Dispatch(args []string) int {
 	if len(args) == 0 {
-		// No subcommand: default to serve (backward compat with v2).
-		return cmdServe(args)
+		if isInteractiveFn() {
+			if err := runTUIFn(); err != nil {
+				fmt.Fprintf(stderr, "engram-ui: TUI error: %v\n", err)
+				return 1
+			}
+			return 0
+		}
+		printUsage(stdout)
+		return 0
 	}
 
 	switch args[0] {
@@ -42,12 +62,24 @@ func Dispatch(args []string) int {
 	}
 }
 
+// isInteractive returns true when stdin is a terminal (character device).
+// Non-interactive contexts include pipes, redirected files, and systemd-
+// managed services.
+func isInteractive() bool {
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return (stat.Mode() & os.ModeCharDevice) != 0
+}
+
 // printUsage writes the usage text to w.
 func printUsage(w io.Writer) {
 	fmt.Fprintln(w, `engram-ui — web viewer for engram persistent memory
 
 Usage:
-  engram-ui [serve] [flags]    start the web UI (default)
+  engram-ui                    launch interactive installer TUI (default)
+  engram-ui serve [flags]      start the web UI daemon
   engram-ui setup <target>     install skills or configure OS autostart
   engram-ui version            print version and exit
   engram-ui help               print this help
@@ -58,8 +90,8 @@ Serve flags:
   --no-spawn         fail instead of auto-spawning 'engram serve'
 
 Setup targets:
-  claude-code        install engram-conventions skill for Claude Code
-  opencode           install engram-conventions skill for OpenCode
-  os-autostart       register engram-ui as an OS autostart entry
-  remove-autostart   remove the OS autostart entry`)
+  claude-code <skill>    install the named skill for Claude Code
+  opencode <skill>       install the named skill for OpenCode
+  os-autostart           register engram-ui as an OS autostart entry
+  remove-autostart       remove the OS autostart entry`)
 }

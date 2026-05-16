@@ -2,20 +2,85 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
-func TestDispatch_NoArgs_DefaultsToServe(t *testing.T) {
-	// With no args, Dispatch should behave like serve (exit 0 for our stub).
-	// We can't fully test serve (it binds a port), but we test that it routes
-	// without panic and returns a valid exit code. We'll test via a seam.
-	// For now, just verify it doesn't panic and returns 0 or 1 (not 2).
-	// A more complete integration test is in serve_test.go.
-	// Here we just verify non-unknown-subcommand path.
-	t.Skip("serve requires network — covered in serve integration test")
+func TestDispatch_NoArgs_TTY_LaunchesTUI(t *testing.T) {
+	called := false
+	origRun := runTUIFn
+	defer func() { runTUIFn = origRun }()
+	runTUIFn = func() error {
+		called = true
+		return nil
+	}
+
+	origTTY := isInteractiveFn
+	defer func() { isInteractiveFn = origTTY }()
+	isInteractiveFn = func() bool { return true }
+
+	code := Dispatch([]string{})
+	if code != 0 {
+		t.Errorf("Dispatch([]) interactive = %d, want 0", code)
+	}
+	if !called {
+		t.Error("Dispatch([]) interactive: expected runTUIFn to be called")
+	}
+}
+
+func TestDispatch_NoArgs_NonTTY_PrintsHelp(t *testing.T) {
+	origRun := runTUIFn
+	defer func() { runTUIFn = origRun }()
+	runTUIFn = func() error {
+		t.Error("non-interactive: runTUIFn must NOT be called")
+		return nil
+	}
+
+	origTTY := isInteractiveFn
+	defer func() { isInteractiveFn = origTTY }()
+	isInteractiveFn = func() bool { return false }
+
+	var buf bytes.Buffer
+	origStdout := stdout
+	stdout = &buf
+	defer func() { stdout = origStdout }()
+
+	code := Dispatch([]string{})
+	if code != 0 {
+		t.Errorf("Dispatch([]) non-interactive = %d, want 0", code)
+	}
+	if !strings.Contains(buf.String(), "engram-ui") {
+		t.Errorf("Dispatch([]) non-interactive: stdout should contain help, got %q", buf.String())
+	}
+	if !strings.Contains(buf.String(), "serve") {
+		t.Errorf("Dispatch([]) non-interactive: help should mention 'serve' subcommand")
+	}
+}
+
+func TestDispatch_NoArgs_TTY_TUIError_Returns1(t *testing.T) {
+	origRun := runTUIFn
+	defer func() { runTUIFn = origRun }()
+	runTUIFn = func() error { return fmt.Errorf("boom") }
+
+	origTTY := isInteractiveFn
+	defer func() { isInteractiveFn = origTTY }()
+	isInteractiveFn = func() bool { return true }
+
+	var buf bytes.Buffer
+	origStderr := stderr
+	stderr = &buf
+	defer func() { stderr = origStderr }()
+
+	code := Dispatch([]string{})
+	if code != 1 {
+		t.Errorf("Dispatch([]) interactive TUI error = %d, want 1", code)
+	}
+	if !strings.Contains(buf.String(), "boom") {
+		t.Errorf("Dispatch([]) TUI error: stderr should contain error message, got %q", buf.String())
+	}
 }
 
 func TestDispatch_Version(t *testing.T) {
