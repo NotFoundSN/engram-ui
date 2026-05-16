@@ -2,10 +2,6 @@ package views
 
 import (
 	"fmt"
-	"net/url"
-	"strconv"
-
-	"github.com/Gentleman-Programming/engram-ui/internal/client"
 )
 
 type HomeData struct {
@@ -17,7 +13,6 @@ type ProjectCard struct {
 	SessionPreview string // truncated to 140 runes (rune-safe); empty when HasSession=false
 	HasSession     bool
 	LastActivity   string // CreatedAt of the most recent session_summary; empty when HasSession=false
-	ObsCount       int    // number of observations fetched for this project (0 when fetch failed)
 }
 
 templ Home(d HomeData) {
@@ -49,12 +44,6 @@ templ projectCard(c ProjectCard) {
 				<p class="proj-card__preview proj-card__preview--empty">No session yet</p>
 			}
 		</div>
-		<footer class="proj-card__foot">
-			<span class="proj-card__count">{ strconv.Itoa(c.ObsCount) } obs</span>
-			if c.LastActivity != "" {
-				<span class="proj-card__time">{ c.LastActivity }</span>
-			}
-		</footer>
 	</a>
 }
 
@@ -62,45 +51,4 @@ templ emptyHome() {
 	<p class="empty-home">
 		No projects yet. Start a session in any tool that writes to engram, and projects will show up here.
 	</p>
-}
-
-templ chip(label string, href templ.SafeURL, isActive bool) {
-	if isActive {
-		<a
-			href={ href }
-			class="chip is-active"
-		>{ label }</a>
-	} else {
-		<a
-			href={ href }
-			class="chip"
-		>{ label }</a>
-	}
-}
-
-templ observationRow(o client.Observation, from string) {
-	<li>
-		<a
-			href={ templ.SafeURL(func() string {
-				if from != "" {
-					return fmt.Sprintf("/observations/%d?from=%s", o.ID, url.QueryEscape(from))
-				}
-				return fmt.Sprintf("/observations/%d", o.ID)
-			}()) }
-			class="obs-row"
-		>
-			<div class="obs-row__head">
-				<span class="obs-row__title">{ o.Title }</span>
-				<span class="type-badge">
-					{ o.Type }
-				</span>
-			</div>
-			<div class="obs-row__foot">
-				<span>{ o.CreatedAt }</span>
-				if o.TopicKey != nil {
-					<span class="topic-pill">· { *o.TopicKey }</span>
-				}
-			</div>
-		</a>
-	</li>
 }

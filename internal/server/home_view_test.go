@@ -44,7 +44,7 @@ func TestHomeView_RendersProjGrid(t *testing.T) {
 }
 
 // TestHomeView_CardContent asserts that each .proj-card shows the project name,
-// observation count, activity timestamp, and a preview snippet from the latest observation.
+// activity timestamp and a preview snippet from the latest observation.
 func TestHomeView_CardContent(t *testing.T) {
 	stub := &stubEngramClient{
 		statsOut: &client.Stats{Projects: []string{"myproj"}},
@@ -85,11 +85,6 @@ func TestHomeView_CardContent(t *testing.T) {
 	}
 	if !strings.Contains(body, "Hello preview content") {
 		t.Error("expected preview snippet 'Hello preview content' in card")
-	}
-
-	// Observation count must appear (via .proj-card__count)
-	if !strings.Contains(body, `proj-card__count`) {
-		t.Error("expected .proj-card__count element in card")
 	}
 }
 
