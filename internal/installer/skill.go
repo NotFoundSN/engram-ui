@@ -68,6 +68,37 @@ func InstallOpenCodeSkill(name string) (Result, error) {
 	return installSkill(OpenCodeSkillDir(home, xdg, name), srcRoot)
 }
 
+// UninstallClaudeCodeSkill removes the named skill from the Claude Code skills
+// directory. Returns ActionRemoved when the directory existed and was removed,
+// ActionNotRegistered when it did not exist.
+func UninstallClaudeCodeSkill(name string) (Result, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return Result{}, err
+	}
+	return uninstallSkill(ClaudeSkillDir(home, name))
+}
+
+// UninstallOpenCodeSkill removes the named skill from the OpenCode skills directory.
+func UninstallOpenCodeSkill(name string) (Result, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return Result{}, err
+	}
+	xdg := os.Getenv("XDG_CONFIG_HOME")
+	return uninstallSkill(OpenCodeSkillDir(home, xdg, name))
+}
+
+func uninstallSkill(destRoot string) (Result, error) {
+	if _, err := os.Stat(destRoot); os.IsNotExist(err) {
+		return Result{Destination: destRoot, Action: ActionNotRegistered}, nil
+	}
+	if err := os.RemoveAll(destRoot); err != nil {
+		return Result{Destination: destRoot}, err
+	}
+	return Result{Destination: destRoot, Action: ActionRemoved}, nil
+}
+
 // installSkill copies the embedded subtree at srcRoot to destRoot. It returns
 // ActionInstalled when destRoot is empty, ActionOverwritten when SKILL.md
 // already exists there.
