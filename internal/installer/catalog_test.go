@@ -60,6 +60,31 @@ func TestLoadCatalog_SortedByName(t *testing.T) {
 	}
 }
 
+func TestLoadCatalog_FindsDebug(t *testing.T) {
+	catalog, err := LoadCatalog()
+	if err != nil {
+		t.Fatalf("LoadCatalog(): %v", err)
+	}
+
+	var found *Skill
+	for i := range catalog {
+		if catalog[i].Name == "debug" {
+			found = &catalog[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("LoadCatalog: debug skill not found in catalog, got %d skills", len(catalog))
+	}
+
+	if found.Description == "" {
+		t.Errorf("LoadCatalog: debug description is empty")
+	}
+	if !strings.Contains(found.Description, "bug") && !strings.Contains(found.Description, "fix") {
+		t.Errorf("LoadCatalog: debug description should mention 'bug' or 'fix', got %q", found.Description)
+	}
+}
+
 func TestLoadCatalog_OnlyClaudeVariantSkillsAppear(t *testing.T) {
 	// Catalog discovery walks skills/*/claude/SKILL.md as the canonical entry.
 	// A skill without a claude/ subfolder MUST NOT appear (still being migrated).
@@ -69,14 +94,11 @@ func TestLoadCatalog_OnlyClaudeVariantSkillsAppear(t *testing.T) {
 		t.Fatalf("LoadCatalog(): %v", err)
 	}
 
-	// As of Phase 1, only brainstorm has been fully migrated to claude/+opencode/.
-	// The catalog should NOT include engram-conventions or debug yet.
+	// As of Phase 2, brainstorm and debug have been migrated to claude/+opencode/.
+	// engram-conventions still pending (Phase 3).
 	for _, s := range catalog {
 		if s.Name == "engram-conventions" {
 			t.Errorf("LoadCatalog: engram-conventions appeared in catalog before Phase 3 migration")
-		}
-		if s.Name == "debug" {
-			t.Errorf("LoadCatalog: debug appeared in catalog before Phase 2 migration")
 		}
 	}
 }
