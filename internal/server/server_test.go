@@ -1456,7 +1456,123 @@ func TestStaticHandler_Font(t *testing.T) {
 	}
 }
 
-// TestStaticHandler_NoShadowing verifies that existing routes still return correct
+// --- layout shell tests (Task 3.1) ---
+
+// SCN: TestLayout_LinksStylesheet — every rendered page MUST contain
+// <link rel="stylesheet" href="/static/app.css">.
+func TestLayout_LinksStylesheet(t *testing.T) {
+	stub := &stubEngramClient{
+		statsOut: &client.Stats{Projects: []string{}},
+	}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `rel="stylesheet"`) || !strings.Contains(body, `href="/static/app.css"`) {
+		t.Error(`expected <link rel="stylesheet" href="/static/app.css"> in response body`)
+	}
+}
+
+// SCN: TestLayout_NoTailwindCDN — no rendered page MUST contain the Tailwind CDN script.
+func TestLayout_NoTailwindCDN(t *testing.T) {
+	stub := &stubEngramClient{
+		statsOut: &client.Stats{Projects: []string{}},
+	}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if strings.Contains(rr.Body.String(), "cdn.tailwindcss.com") {
+		t.Error("response body must NOT contain cdn.tailwindcss.com")
+	}
+}
+
+// SCN: TestLayout_HeaderChrome — header MUST contain accent dot + wordmark + nav.
+func TestLayout_HeaderChrome(t *testing.T) {
+	stub := &stubEngramClient{
+		statsOut: &client.Stats{Projects: []string{}},
+	}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `class="accent-dot"`) {
+		t.Error(`expected element with class="accent-dot" in response body`)
+	}
+	if !strings.Contains(body, "engram-ui") {
+		t.Error("expected text 'engram-ui' inside header")
+	}
+	if !strings.Contains(body, "<nav") {
+		t.Error("expected <nav> element in response body")
+	}
+}
+
+// SCN: TestLayout_FontPreloads — at least 4 font preload <link> hints MUST be present.
+func TestLayout_FontPreloads(t *testing.T) {
+	stub := &stubEngramClient{
+		statsOut: &client.Stats{Projects: []string{}},
+	}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	// Count occurrences of preload font link hints
+	preloadCount := strings.Count(body, `rel="preload"`)
+	if preloadCount < 4 {
+		t.Errorf("expected at least 4 font preload <link> hints, found %d", preloadCount)
+	}
+	if !strings.Contains(body, `as="font"`) {
+		t.Error(`expected as="font" attribute on preload links`)
+	}
+	if !strings.Contains(body, `type="font/woff2"`) {
+		t.Error(`expected type="font/woff2" attribute on preload links`)
+	}
+}
+
+// SCN: TestLayout_FooterEndpoint — footer MUST display "localhost:7437".
+func TestLayout_FooterEndpoint(t *testing.T) {
+	stub := &stubEngramClient{
+		statsOut: &client.Stats{Projects: []string{}},
+	}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "localhost:7437") {
+		t.Error("expected 'localhost:7437' in footer region")
+	}
+}
+
+// AUX: TestStaticHandler_NoShadowing verifies that existing routes still return correct
 // responses after /static/* is mounted.
 func TestStaticHandler_NoShadowing(t *testing.T) {
 	stub := &stubEngramClient{

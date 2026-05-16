@@ -2,29 +2,31 @@ package views
 
 templ Layout(title string) {
 	<!DOCTYPE html>
-	<html lang="en" class="h-full bg-slate-950">
+	<html lang="en" class="h-full">
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<title>{ title } · engram-ui</title>
-			<script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+			<link rel="preload" as="font" type="font/woff2" href="/static/fonts/GeistMono-Regular.woff2" crossorigin=""/>
+			<link rel="preload" as="font" type="font/woff2" href="/static/fonts/GeistMono-Medium.woff2" crossorigin=""/>
+			<link rel="preload" as="font" type="font/woff2" href="/static/fonts/IBMPlexMono-Regular.woff2" crossorigin=""/>
+			<link rel="preload" as="font" type="font/woff2" href="/static/fonts/IBMPlexMono-Medium.woff2" crossorigin=""/>
+			<link rel="stylesheet" href="/static/app.css"/>
 		</head>
-		<body class="h-full text-slate-100 antialiased">
-			<header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur">
-				<div class="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-					<a href="/" class="flex items-center gap-3">
-						<span class="inline-block h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
-						<span class="text-lg font-semibold tracking-tight">engram-ui</span>
-					</a>
-					<nav class="text-sm text-slate-400">
-						<a href="/" class="hover:text-slate-100">Home</a>
-					</nav>
-				</div>
+		<body>
+			<header class="app-header">
+				<a href="/" class="wordmark">
+					<span class="accent-dot"></span>
+					<span>engram-ui</span>
+				</a>
+				<nav class="app-nav">
+					<a href="/">Home</a>
+				</nav>
 			</header>
-			<main class="mx-auto max-w-5xl px-6 py-10">
+			<main class="app-main">
 				{ children... }
 			</main>
-			<footer class="mx-auto max-w-5xl px-6 py-8 text-xs text-slate-500">
+			<footer class="app-footer">
 				Reads engram via REST · localhost:7437
 			</footer>
 		</body>

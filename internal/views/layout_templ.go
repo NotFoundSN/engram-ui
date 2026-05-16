@@ -29,7 +29,7 @@ func Layout(title string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\" class=\"h-full bg-slate-950\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\" class=\"h-full\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -42,7 +42,7 @@ func Layout(title string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " · engram-ui</title><script src=\"https://cdn.tailwindcss.com?plugins=typography\"></script></head><body class=\"h-full text-slate-100 antialiased\"><header class=\"border-b border-slate-800 bg-slate-900/60 backdrop-blur\"><div class=\"mx-auto flex max-w-5xl items-center justify-between px-6 py-4\"><a href=\"/\" class=\"flex items-center gap-3\"><span class=\"inline-block h-2.5 w-2.5 rounded-full bg-emerald-400\"></span> <span class=\"text-lg font-semibold tracking-tight\">engram-ui</span></a><nav class=\"text-sm text-slate-400\"><a href=\"/\" class=\"hover:text-slate-100\">Home</a></nav></div></header><main class=\"mx-auto max-w-5xl px-6 py-10\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " · engram-ui</title><link rel=\"preload\" as=\"font\" type=\"font/woff2\" href=\"/static/fonts/GeistMono-Regular.woff2\" crossorigin=\"\"><link rel=\"preload\" as=\"font\" type=\"font/woff2\" href=\"/static/fonts/GeistMono-Medium.woff2\" crossorigin=\"\"><link rel=\"preload\" as=\"font\" type=\"font/woff2\" href=\"/static/fonts/IBMPlexMono-Regular.woff2\" crossorigin=\"\"><link rel=\"preload\" as=\"font\" type=\"font/woff2\" href=\"/static/fonts/IBMPlexMono-Medium.woff2\" crossorigin=\"\"><link rel=\"stylesheet\" href=\"/static/app.css\"></head><body><header class=\"app-header\"><a href=\"/\" class=\"wordmark\"><span class=\"accent-dot\"></span> <span>engram-ui</span></a><nav class=\"app-nav\"><a href=\"/\">Home</a></nav></header><main class=\"app-main\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -50,7 +50,7 @@ func Layout(title string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</main><footer class=\"mx-auto max-w-5xl px-6 py-8 text-xs text-slate-500\">Reads engram via REST · localhost:7437</footer></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</main><footer class=\"app-footer\">Reads engram via REST · localhost:7437</footer></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
