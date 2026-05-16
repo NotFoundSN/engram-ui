@@ -85,6 +85,79 @@ func TestDispatch_NoArgs_TTY_TUIError_Returns1(t *testing.T) {
 	}
 }
 
+func TestDispatch_NoTUIFlag_TTY_PrintsHelp(t *testing.T) {
+	// --no-tui must short-circuit the TUI even when stdin is a terminal.
+	origRun := runTUIFn
+	defer func() { runTUIFn = origRun }()
+	runTUIFn = func() error {
+		t.Error("--no-tui: runTUIFn must NOT be called")
+		return nil
+	}
+
+	origTTY := isInteractiveFn
+	defer func() { isInteractiveFn = origTTY }()
+	isInteractiveFn = func() bool { return true }
+
+	var buf bytes.Buffer
+	origStdout := stdout
+	stdout = &buf
+	defer func() { stdout = origStdout }()
+
+	code := Dispatch([]string{"--no-tui"})
+	if code != 0 {
+		t.Errorf("Dispatch([--no-tui]) TTY = %d, want 0", code)
+	}
+	if !strings.Contains(buf.String(), "engram-ui") {
+		t.Errorf("Dispatch([--no-tui]) TTY: stdout should contain help, got %q", buf.String())
+	}
+	if !strings.Contains(buf.String(), "serve") {
+		t.Errorf("Dispatch([--no-tui]) TTY: help should mention 'serve'")
+	}
+}
+
+func TestDispatch_NoTUIFlag_NonTTY_PrintsHelp(t *testing.T) {
+	// --no-tui is also valid in non-TTY contexts (idempotent: behaves like no-args non-TTY).
+	origRun := runTUIFn
+	defer func() { runTUIFn = origRun }()
+	runTUIFn = func() error {
+		t.Error("--no-tui non-TTY: runTUIFn must NOT be called")
+		return nil
+	}
+
+	origTTY := isInteractiveFn
+	defer func() { isInteractiveFn = origTTY }()
+	isInteractiveFn = func() bool { return false }
+
+	var buf bytes.Buffer
+	origStdout := stdout
+	stdout = &buf
+	defer func() { stdout = origStdout }()
+
+	code := Dispatch([]string{"--no-tui"})
+	if code != 0 {
+		t.Errorf("Dispatch([--no-tui]) non-TTY = %d, want 0", code)
+	}
+	if !strings.Contains(buf.String(), "engram-ui") {
+		t.Errorf("Dispatch([--no-tui]) non-TTY: stdout should contain help, got %q", buf.String())
+	}
+}
+
+func TestDispatch_NoTUIFlag_HelpMentionsIt(t *testing.T) {
+	// Help text should advertise --no-tui so users can discover it.
+	var buf bytes.Buffer
+	origStdout := stdout
+	stdout = &buf
+	defer func() { stdout = origStdout }()
+
+	code := Dispatch([]string{"help"})
+	if code != 0 {
+		t.Errorf("Dispatch([help]) = %d, want 0", code)
+	}
+	if !strings.Contains(buf.String(), "--no-tui") {
+		t.Errorf("Dispatch([help]) output missing '--no-tui' flag, got: %q", buf.String())
+	}
+}
+
 func TestDispatch_Version(t *testing.T) {
 	var buf bytes.Buffer
 	origStdout := stdout

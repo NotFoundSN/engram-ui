@@ -54,6 +54,11 @@ func Dispatch(args []string) int {
 	case "help", "--help", "-h":
 		printUsage(stdout)
 		return 0
+	case "--no-tui":
+		// Force-print help even when stdin is a TTY. Lets users discover the
+		// CLI without entering the interactive installer.
+		printUsage(stdout)
+		return 0
 	default:
 		if strings.HasPrefix(args[0], "-") {
 			// Flag-first invocation: implicit serve for backward compat.
@@ -89,6 +94,7 @@ Usage:
   engram-ui list [--json]                list available skills
   engram-ui version                      print version and exit
   engram-ui help                         print this help
+  engram-ui --no-tui                     print help instead of launching the TUI
 
 Serve flags:
   --engram=<url>     engram REST API base URL (default: http://localhost:7437)
