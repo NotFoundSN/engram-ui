@@ -50,6 +50,36 @@ func TestCmdList_PlainText_OneLinePerSkill(t *testing.T) {
 	}
 }
 
+// --- AUX (REQ-3.2): list plain-text emits "name — " for empty description ---
+
+func TestCmdList_PlainText_EmptyDescription_EmitsNameAndDash(t *testing.T) {
+	// REQ-3.2 contract: every skill produces a line in the form `name — description`.
+	// With empty description, the trailing " — " is preserved (spec-literal).
+	// Catalog data today has no empty-description skills; this guards future drift.
+	mixed := []installer.Skill{
+		{Name: "noop", Description: ""},
+		{Name: "brainstorm", Description: "AI brainstorming tool"},
+	}
+	var outBuf, errBuf bytes.Buffer
+	withListSeam(&outBuf, &errBuf, func() ([]installer.Skill, error) { return mixed, nil }, func() {
+		code := cmdList([]string{})
+		if code != 0 {
+			t.Errorf("cmdList([]) = %d, want 0", code)
+		}
+	})
+
+	out := outBuf.String()
+	if !strings.Contains(out, "noop — \n") {
+		t.Errorf("empty-description line should be 'noop — \\n', got: %q", out)
+	}
+	if !strings.Contains(out, "brainstorm — AI brainstorming tool") {
+		t.Errorf("non-empty description line missing, got: %q", out)
+	}
+	if errBuf.Len() != 0 {
+		t.Errorf("stderr should be empty, got: %q", errBuf.String())
+	}
+}
+
 // --- SCN-09: list --json — machine-readable ---
 
 func TestCmdList_JSON_ValidArray(t *testing.T) {
