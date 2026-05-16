@@ -85,20 +85,52 @@ func TestLoadCatalog_FindsDebug(t *testing.T) {
 	}
 }
 
-func TestLoadCatalog_OnlyClaudeVariantSkillsAppear(t *testing.T) {
-	// Catalog discovery walks skills/*/claude/SKILL.md as the canonical entry.
-	// A skill without a claude/ subfolder MUST NOT appear (still being migrated).
-	// This guards against half-migrated skills accidentally showing up.
+func TestLoadCatalog_FindsEngramConventions(t *testing.T) {
 	catalog, err := LoadCatalog()
 	if err != nil {
 		t.Fatalf("LoadCatalog(): %v", err)
 	}
 
-	// As of Phase 2, brainstorm and debug have been migrated to claude/+opencode/.
-	// engram-conventions still pending (Phase 3).
+	var found *Skill
+	for i := range catalog {
+		if catalog[i].Name == "engram-conventions" {
+			found = &catalog[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("LoadCatalog: engram-conventions skill not found, got %d skills", len(catalog))
+	}
+
+	if found.Description == "" {
+		t.Errorf("LoadCatalog: engram-conventions description is empty")
+	}
+	if !strings.Contains(found.Description, "engram") && !strings.Contains(found.Description, "observation") {
+		t.Errorf("LoadCatalog: engram-conventions description should mention 'engram' or 'observation', got %q", found.Description)
+	}
+}
+
+func TestLoadCatalog_AllThreeSkillsMigrated(t *testing.T) {
+	// After Phase 3, all three pre-existing skills are migrated to the
+	// per-tool layout and must appear in the catalog.
+	catalog, err := LoadCatalog()
+	if err != nil {
+		t.Fatalf("LoadCatalog(): %v", err)
+	}
+
+	want := map[string]bool{
+		"brainstorm":         false,
+		"debug":              false,
+		"engram-conventions": false,
+	}
 	for _, s := range catalog {
-		if s.Name == "engram-conventions" {
-			t.Errorf("LoadCatalog: engram-conventions appeared in catalog before Phase 3 migration")
+		if _, ok := want[s.Name]; ok {
+			want[s.Name] = true
+		}
+	}
+	for name, present := range want {
+		if !present {
+			t.Errorf("LoadCatalog: expected skill %q not present in catalog", name)
 		}
 	}
 }

@@ -85,6 +85,43 @@ func TestInstallOpenCodeSkill_Brainstorm(t *testing.T) {
 	}
 }
 
+func TestInstallClaudeCodeSkill_EngramConventions_MultiFile(t *testing.T) {
+	// engram-conventions is a multi-file skill: SKILL.md + 4 root .md + workflows/.
+	// This test verifies the recursive CopySkill walks nested directories
+	// (specifically workflows/sdd.md should land at the destination).
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
+
+	result, err := InstallClaudeCodeSkill("engram-conventions")
+	if err != nil {
+		t.Fatalf("InstallClaudeCodeSkill(engram-conventions): %v", err)
+	}
+
+	expectedDir := ClaudeSkillDir(tmpHome, "engram-conventions")
+	if result.Destination != expectedDir {
+		t.Errorf("Destination = %q, want %q", result.Destination, expectedDir)
+	}
+
+	// Spot-check files at top level + nested workflows/.
+	wantPaths := []string{
+		"SKILL.md",
+		"types.md",
+		"topic-keys.md",
+		"lifecycle.md",
+		"multi-repo.md",
+		filepath.Join("workflows", "sdd.md"),
+		filepath.Join("workflows", "ad-hoc.md"),
+		filepath.Join("workflows", "superpowers.md"),
+	}
+	for _, rel := range wantPaths {
+		p := filepath.Join(expectedDir, rel)
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("expected %s installed at %q, missing: %v", rel, p, err)
+		}
+	}
+}
+
 func TestInstallAutostart(t *testing.T) {
 	tmpAppData := t.TempDir()
 	t.Setenv("APPDATA", tmpAppData)

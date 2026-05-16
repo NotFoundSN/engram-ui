@@ -85,18 +85,20 @@ Designed against the Agent Skills spec. Works with:
     `.agents/skills/`
   - Override the global root via `$OPENCODE_CONFIG_DIR`
 
-> **Tip**: running `engram-ui setup claude-code` also makes the skill
-> available to OpenCode via `~/.claude/skills/` (cross-tool path). One
-> install command can cover both agents.
+> **Tip**: running `engram-ui setup claude-code engram-conventions` installs
+> the Claude variant — OpenCode can also pick it up via `~/.claude/skills/`
+> (cross-tool path). If you want the OpenCode-optimized variant instead,
+> run `engram-ui setup opencode engram-conventions` separately.
 
-**Installation**: run `engram-ui setup claude-code` or
-`engram-ui setup opencode`. The canonical skill source lives in this
-repository at `internal/installer/skills/engram-conventions/` and is
+**Installation**: run `engram-ui setup claude-code engram-conventions` or
+`engram-ui setup opencode engram-conventions`. The canonical skill source
+lives in this repository at
+`internal/installer/skills/engram-conventions/{claude,opencode}/` and is
 embedded into the `engram-ui` binary at build time via `//go:embed`. The
 setup commands copy the embedded payload into the target agent's skills
-directory (`~/.claude/skills/engram-conventions/` for Claude Code, etc.).
-Re-run the setup command after upgrading `engram-ui` to refresh the local
-copy.
+directory (`~/.claude/skills/engram-conventions/` for Claude Code,
+`~/.config/opencode/skills/engram-conventions/` for OpenCode). Re-run the
+setup command after upgrading `engram-ui` to refresh the local copy.
 
 **Version compatibility**: relies only on standard MCP tool names (`mem_save`,
 `mem_search`, etc.) and the Agent Skills spec `SKILL.md` loading convention.
