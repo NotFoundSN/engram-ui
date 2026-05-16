@@ -401,7 +401,9 @@ func TestHandleProject_TopicKeyPrefixFilter(t *testing.T) {
 func TestHandleProject_TopicKeyPrefixPreservedInForms(t *testing.T) {
 	// When ?topic_key_prefix= is active, every filter form on the page must
 	// carry it as a hidden input so submitting one form does not drop the
-	// active prefix filter.
+	// active prefix filter. Phase 5 replaced the type filter <select> form
+	// with anchor chips, so there are now 2 forms: search and sort.
+	// Each chip's href already encodes topic_key_prefix via projectFilterHref.
 	k := "sdd/auth/spec"
 	obs := []client.Observation{
 		{ID: 1, Type: "spec", Title: "Auth Spec", Content: "c", CreatedAt: "2026-01-01", TopicKey: &k},
@@ -421,14 +423,18 @@ func TestHandleProject_TopicKeyPrefixPreservedInForms(t *testing.T) {
 	}
 	body := rr.Body.String()
 
-	// At least one hidden input with the prefix value must exist on the page.
-	// The hidden input must appear at least 3 times (once per form: search,
-	// sort, type filter). Counting >=3 is sufficient since the page renders
-	// all three forms when not in search mode.
+	// Hidden inputs must appear in both forms (search and sort).
+	// The type filter is now anchor chips — prefix is carried via href params.
 	needle := `type="hidden" name="topic_key_prefix" value="sdd/auth/"`
 	count := strings.Count(body, needle)
-	if count < 3 {
-		t.Errorf("expected hidden topic_key_prefix input in 3 forms; found %d occurrences of %q", count, needle)
+	if count < 2 {
+		t.Errorf("expected hidden topic_key_prefix input in 2 forms (search, sort); found %d occurrences of %q", count, needle)
+	}
+
+	// Additionally, chip hrefs must include topic_key_prefix so navigating
+	// via chips also preserves the filter.
+	if !strings.Contains(body, "topic_key_prefix") {
+		t.Error("expected topic_key_prefix to appear in chip hrefs (filter-chip-row)")
 	}
 }
 
@@ -688,6 +694,8 @@ func alphaStub() *stubEngramClient {
 }
 
 func TestHandleProject_TypeSelectIncludesAllCanonical(t *testing.T) {
+	// Phase 5: type filter is now a .filter-chip-row of anchor chips,
+	// not a <select>. Verify all canonical types appear as chips.
 	s := newWithClient(alphaStub())
 	req := httptest.NewRequest(http.MethodGet, "/p/alpha", nil)
 	rr := httptest.NewRecorder()
@@ -698,36 +706,37 @@ func TestHandleProject_TypeSelectIncludesAllCanonical(t *testing.T) {
 	}
 	body := rr.Body.String()
 
-	// templ renders id before name, so we check for both separately
-	if !strings.Contains(body, `name="type"`) || !strings.Contains(body, `<select`) {
-		t.Error("expected <select ... name=\"type\"> in body")
+	// Must have a .filter-chip-row (chips replaced the <select>)
+	if !strings.Contains(body, `class="filter-chip-row"`) {
+		t.Error("expected .filter-chip-row in body (chips replaced <select name=\"type\">)")
 	}
 
-	// All 14 canonical types must appear as option values
+	// All 14 canonical types must appear as chip link text
 	canonicalTypes := []string{
 		"architecture", "bugfix", "config", "decision", "design",
 		"discovery", "exploration", "pattern", "plan", "preference",
 		"proposal", "report", "spec", "tasks",
 	}
 	for _, typ := range canonicalTypes {
-		needle := `value="` + typ + `"`
-		if !strings.Contains(body, needle) {
-			t.Errorf("expected option %q in select", typ)
+		if !strings.Contains(body, typ) {
+			t.Errorf("expected chip for type %q in filter-chip-row", typ)
 		}
 	}
 
-	// custom-internal must also appear
-	if !strings.Contains(body, `value="custom-internal"`) {
-		t.Error("expected custom-internal option in select")
+	// custom-internal must also appear as a chip
+	if !strings.Contains(body, "custom-internal") {
+		t.Error("expected chip for 'custom-internal' type in filter-chip-row")
 	}
 
-	// "All types" option must be present
-	if !strings.Contains(body, `value=""`) {
-		t.Error(`expected "All types" option with value="" in select`)
+	// "all" reset chip must be present
+	if !strings.Contains(body, ">all<") {
+		t.Error(`expected "all" reset chip in filter-chip-row`)
 	}
 }
 
 func TestHandleProject_TypeSelectMarksActiveSelected(t *testing.T) {
+	// Phase 5: active type is now indicated by .is-active class on the chip
+	// anchor, not selected attribute on an <option>.
 	s := newWithClient(alphaStub())
 	req := httptest.NewRequest(http.MethodGet, "/p/alpha?type=decision", nil)
 	rr := httptest.NewRecorder()
@@ -738,12 +747,17 @@ func TestHandleProject_TypeSelectMarksActiveSelected(t *testing.T) {
 	}
 	body := rr.Body.String()
 
-	if !strings.Contains(body, `value="decision" selected`) {
-		t.Error(`expected option value="decision" selected in body`)
+	// The decision chip must be marked active
+	if !strings.Contains(body, "is-active") {
+		t.Error("expected is-active class on the active type chip")
+	}
+	if !strings.Contains(body, `aria-current="page"`) {
+		t.Error(`expected aria-current="page" on the active type chip`)
 	}
 }
 
 func TestHandleProject_TypeSelectMarksAllTypesSelectedWhenNoFilter(t *testing.T) {
+	// Phase 5: "all" chip should be is-active when no ?type= is set.
 	s := newWithClient(alphaStub())
 	req := httptest.NewRequest(http.MethodGet, "/p/alpha", nil)
 	rr := httptest.NewRecorder()
@@ -751,13 +765,33 @@ func TestHandleProject_TypeSelectMarksAllTypesSelectedWhenNoFilter(t *testing.T)
 
 	body := rr.Body.String()
 
-	// The "All types" empty-value option should carry selected
-	if !strings.Contains(body, `value="" selected`) {
-		t.Error(`expected "All types" option (value="") to be selected when no type filter`)
+	// The "all" chip must have is-active class when no type filter is set.
+	// Find "all" chip with is-active in its class.
+	found := false
+	searchIn := body
+	for {
+		chipIdx := strings.Index(searchIn, `class="chip`)
+		if chipIdx == -1 {
+			break
+		}
+		aEnd := strings.Index(searchIn[chipIdx:], "</a>")
+		if aEnd == -1 {
+			break
+		}
+		chipBlock := searchIn[chipIdx : chipIdx+aEnd+4]
+		if strings.Contains(chipBlock, "all") && strings.Contains(chipBlock, "is-active") {
+			found = true
+			break
+		}
+		searchIn = searchIn[chipIdx+1:]
+	}
+	if !found {
+		t.Error(`expected "all" chip to have is-active class when no ?type= filter is set`)
 	}
 }
 
 func TestHandleProject_TypeSelectIncludesPhantom(t *testing.T) {
+	// Phase 5: phantom type appears as a chip with is-active when active.
 	s := newWithClient(alphaStub())
 	req := httptest.NewRequest(http.MethodGet, "/p/alpha?type=disappeared", nil)
 	rr := httptest.NewRecorder()
@@ -765,12 +799,19 @@ func TestHandleProject_TypeSelectIncludesPhantom(t *testing.T) {
 
 	body := rr.Body.String()
 
-	if !strings.Contains(body, `value="disappeared" selected`) {
-		t.Error(`expected phantom option value="disappeared" selected in body`)
+	// The phantom "disappeared" chip must be present and marked active
+	if !strings.Contains(body, "disappeared") {
+		t.Error("expected phantom type 'disappeared' to appear as a chip in the filter row")
+	}
+	// The active chip must carry is-active (the disappeared chip)
+	if !strings.Contains(body, "is-active") {
+		t.Error("expected is-active class on the 'disappeared' phantom chip")
 	}
 }
 
 func TestHandleProject_TypeSelectFormHasHiddenQAndSort(t *testing.T) {
+	// Phase 5: type filter is now a .filter-chip-row (no form). q and sort
+	// are preserved in each chip's href via projectFilterHref.
 	s := newWithClient(alphaStub())
 	req := httptest.NewRequest(http.MethodGet, "/p/alpha?q=auth&sort=date_asc", nil)
 	rr := httptest.NewRecorder()
@@ -778,26 +819,18 @@ func TestHandleProject_TypeSelectFormHasHiddenQAndSort(t *testing.T) {
 
 	body := rr.Body.String()
 
-	// Scope assertion to the type filter form block (identified by id="type-select")
-	selectIdx := strings.Index(body, `id="type-select"`)
-	if selectIdx == -1 {
-		t.Fatal("expected id=\"type-select\" (type filter select) in body")
+	// The .filter-chip-row must be present (no <select name="type">)
+	if !strings.Contains(body, `class="filter-chip-row"`) {
+		t.Fatal("expected .filter-chip-row in body")
 	}
-	formStart := strings.LastIndex(body[:selectIdx], "<form")
-	if formStart == -1 {
-		t.Fatal("could not find <form before type select")
-	}
-	formEnd := strings.Index(body[selectIdx:], "</form>")
-	if formEnd == -1 {
-		t.Fatal("could not find </form> after type select")
-	}
-	typeFilterForm := body[formStart : selectIdx+formEnd+len("</form>")]
 
-	if !strings.Contains(typeFilterForm, `type="hidden" name="q" value="auth"`) {
-		t.Error(`expected hidden input for q="auth" in type filter form`)
+	// Each chip's href must include q=auth and sort=date_asc
+	// (projectFilterHref encodes them into the URL)
+	if !strings.Contains(body, "q=auth") {
+		t.Error("expected q=auth preserved in chip hrefs")
 	}
-	if !strings.Contains(typeFilterForm, `type="hidden" name="sort" value="date_asc"`) {
-		t.Error(`expected hidden input for sort="date_asc" in type filter form`)
+	if !strings.Contains(body, "sort=date_asc") {
+		t.Error("expected sort=date_asc preserved in chip hrefs")
 	}
 }
 
@@ -914,7 +947,9 @@ func TestHandleProject_RowsHaveFromWithExplicitDefaultSort(t *testing.T) {
 }
 
 func TestHandleProject_NoOnchangeJavaScriptHandler(t *testing.T) {
-	// The type select must NOT have onchange= (NFR-7)
+	// Phase 5: type filter is now anchor chips — no onchange JS at all
+	// for type filtering. The sort select still uses onchange for convenience,
+	// which is acceptable. Verify the .filter-chip-row contains no onchange.
 	s := newWithClient(alphaStub())
 	req := httptest.NewRequest(http.MethodGet, "/p/alpha", nil)
 	rr := httptest.NewRecorder()
@@ -922,24 +957,23 @@ func TestHandleProject_NoOnchangeJavaScriptHandler(t *testing.T) {
 
 	body := rr.Body.String()
 
-	// Find the type-select element by its id attribute (templ puts id before name)
-	selectIdx := strings.Index(body, `id="type-select"`)
-	if selectIdx == -1 {
-		t.Fatal(`expected id="type-select" (type filter select) in body`)
+	// .filter-chip-row must be present (chips replaced the select)
+	chipRowIdx := strings.Index(body, `class="filter-chip-row"`)
+	if chipRowIdx == -1 {
+		t.Fatal(`expected class="filter-chip-row" in body`)
 	}
-	// Find the start of the enclosing <select tag
-	selectStart := strings.LastIndex(body[:selectIdx], "<select")
-	if selectStart == -1 {
-		t.Fatal("could not find <select before id=\"type-select\"")
+
+	// Find the end of the filter-chip-row div to scope the check
+	tail := body[chipRowIdx:]
+	endDiv := strings.Index(tail, "</div>")
+	if endDiv == -1 {
+		t.Fatal("could not find closing </div> after filter-chip-row")
 	}
-	// Find closing > of the opening select tag
-	closeIdx := strings.Index(body[selectStart:], ">")
-	if closeIdx == -1 {
-		t.Fatal("could not find end of <select> tag")
-	}
-	selectTag := body[selectStart : selectStart+closeIdx+1]
-	if strings.Contains(selectTag, "onchange") {
-		t.Errorf("type filter select tag must not contain onchange: %s", selectTag)
+	chipRowBlock := tail[:endDiv+6]
+
+	// No chip anchor in the row should have onchange
+	if strings.Contains(chipRowBlock, "onchange") {
+		t.Error("filter-chip-row must not contain onchange attributes — chips are pure anchor links")
 	}
 }
 
