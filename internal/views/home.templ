@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 
 	"github.com/Gentleman-Programming/engram-ui/internal/client"
 )
@@ -15,46 +16,50 @@ type ProjectCard struct {
 	Name           string
 	SessionPreview string // truncated to 140 runes (rune-safe); empty when HasSession=false
 	HasSession     bool
+	LastActivity   string // CreatedAt of the most recent session_summary; empty when HasSession=false
+	ObsCount       int    // number of observations fetched for this project (0 when fetch failed)
 }
 
 templ Home(d HomeData) {
 	@Layout("Home") {
-		<section class="mb-8">
-			<h1 class="mb-1 text-2xl font-semibold tracking-tight">Projects</h1>
-			<p class="text-sm text-slate-400">All projects tracked in engram.</p>
-		</section>
 		if len(d.Cards) == 0 {
 			@emptyHome()
 		} else {
-			@projectGrid(d.Cards)
+			<div class="proj-grid">
+				for _, c := range d.Cards {
+					@projectCard(c)
+				}
+			</div>
 		}
 	}
 }
 
-templ projectGrid(cards []ProjectCard) {
-	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-		for _, c := range cards {
-			@projectCard(c)
-		}
-	</div>
-}
-
 templ projectCard(c ProjectCard) {
-	<a
-		href={ templ.SafeURL(fmt.Sprintf("/p/%s", c.Name)) }
-		class="block rounded-lg border border-slate-800 bg-slate-900/40 p-5 transition hover:border-slate-700 hover:bg-slate-900/80"
-	>
-		<div class="mb-2 font-mono text-sm font-semibold text-slate-100">{ c.Name }</div>
-		if c.HasSession {
-			<p class="line-clamp-3 text-xs text-slate-400">{ c.SessionPreview }</p>
-		} else {
-			<p class="text-xs text-slate-600">No session yet</p>
-		}
+	<a class="proj-card" href={ templ.SafeURL(fmt.Sprintf("/p/%s", c.Name)) }>
+		<header class="proj-card__head">
+			<span class="proj-card__name">{ c.Name }</span>
+			if c.LastActivity != "" {
+				<span class="proj-card__activity">{ c.LastActivity }</span>
+			}
+		</header>
+		<div class="proj-card__body">
+			if c.HasSession {
+				<p class="proj-card__preview">{ c.SessionPreview }</p>
+			} else {
+				<p class="proj-card__preview proj-card__preview--empty">No session yet</p>
+			}
+		</div>
+		<footer class="proj-card__foot">
+			<span class="proj-card__count">{ strconv.Itoa(c.ObsCount) } obs</span>
+			if c.LastActivity != "" {
+				<span class="proj-card__time">{ c.LastActivity }</span>
+			}
+		</footer>
 	</a>
 }
 
 templ emptyHome() {
-	<p class="rounded-lg border border-dashed border-slate-800 p-6 text-center text-sm text-slate-500">
+	<p class="empty-home">
 		No projects yet. Start a session in any tool that writes to engram, and projects will show up here.
 	</p>
 }
@@ -63,12 +68,12 @@ templ chip(label string, href templ.SafeURL, isActive bool) {
 	if isActive {
 		<a
 			href={ href }
-			class="rounded-full border border-emerald-400/60 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-200"
+			class="chip is-active"
 		>{ label }</a>
 	} else {
 		<a
 			href={ href }
-			class="rounded-full border border-slate-800 bg-slate-900/40 px-3 py-1 text-xs text-slate-400 hover:border-slate-700 hover:text-slate-200"
+			class="chip"
 		>{ label }</a>
 	}
 }
@@ -82,18 +87,18 @@ templ observationRow(o client.Observation, from string) {
 				}
 				return fmt.Sprintf("/observations/%d", o.ID)
 			}()) }
-			class="block rounded-md border border-slate-800 bg-slate-900/40 p-4 transition hover:border-slate-700 hover:bg-slate-900/80"
+			class="obs-row"
 		>
-			<div class="flex items-baseline justify-between gap-4">
-				<span class="truncate text-sm font-medium text-slate-100">{ o.Title }</span>
-				<span class="shrink-0 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] uppercase tracking-wider text-slate-300">
+			<div class="obs-row__head">
+				<span class="obs-row__title">{ o.Title }</span>
+				<span class="type-badge">
 					{ o.Type }
 				</span>
 			</div>
-			<div class="mt-1 flex items-center gap-3 text-xs text-slate-500">
+			<div class="obs-row__foot">
 				<span>{ o.CreatedAt }</span>
 				if o.TopicKey != nil {
-					<span class="font-mono text-slate-600">· { *o.TopicKey }</span>
+					<span class="topic-pill">· { *o.TopicKey }</span>
 				}
 			</div>
 		</a>

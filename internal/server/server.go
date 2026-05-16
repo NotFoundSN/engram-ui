@@ -128,11 +128,13 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 				// Graceful degradation: keep HasSession=false for this card.
 				return nil
 			}
+			cards[i].ObsCount = len(obs)
 			// Client-side filter for session_summary (engram ?type= not supported).
 			for _, o := range obs {
 				if o.Type == "session_summary" {
 					cards[i].HasSession = true
 					cards[i].SessionPreview = render.Truncate(o.Content, homePreviewMaxRunes)
+					cards[i].LastActivity = o.CreatedAt
 					break
 				}
 			}
