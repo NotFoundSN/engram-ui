@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/Gentleman-Programming/engram-ui/internal/client"
 	"github.com/Gentleman-Programming/engram-ui/internal/render"
@@ -16,29 +17,67 @@ func backOrRoot(back string) string {
 	return back
 }
 
-// hasSlash reports whether the topic_key contains at least one `/`.
-// Used by the clickable topic_key meta-row — strip-last-segment is undefined
-// for 1-segment keys, so they render as plain text.
-func hasSlash(topicKey string) bool {
-	for i := 0; i < len(topicKey); i++ {
-		if topicKey[i] == '/' {
-			return true
-		}
+// detailCrumbs builds the header breadcrumb trail for an observation page.
+// We only surface the parent project (clickable) — the observation title is
+// already the page <h1>, so repeating it in the crumb is noise. Returns nil
+// when the observation has no project (no useful parent to navigate to).
+func detailCrumbs(o *client.Observation) []Crumb {
+	if o == nil || o.Project == nil || *o.Project == "" {
+		return nil
 	}
-	return false
+	return []Crumb{{Label: *o.Project, Href: "/p/" + *o.Project}}
+}
+
+// hasSlash reports whether the topic_key contains at least one `/`.
+func hasSlash(topicKey string) bool {
+	return strings.IndexByte(topicKey, '/') >= 0
 }
 
 // topicKeyPrefixLink builds /p/{project}?topic_key_prefix={strip-last-segment}.
 // Assumes topicKey contains at least one `/` (caller must guard).
 func topicKeyPrefixLink(project, topicKey string) string {
-	last := -1
-	for i := 0; i < len(topicKey); i++ {
-		if topicKey[i] == '/' {
-			last = i
-		}
-	}
+	last := strings.LastIndexByte(topicKey, '/')
 	prefix := topicKey[:last+1]
 	return "/p/" + project + "?topic_key_prefix=" + url.QueryEscape(prefix)
+}
+
+// topicKeySegments splits a topic_key into segments for pill rendering.
+func topicKeySegments(topicKey string) []string {
+	return strings.Split(topicKey, "/")
+}
+
+// leafOf returns the last `/`-delimited segment of a topic_key, or the whole
+// string when no `/` is present. Empty input yields empty output.
+func leafOf(topicKey string) string {
+	if topicKey == "" {
+		return ""
+	}
+	if i := strings.LastIndexByte(topicKey, '/'); i >= 0 {
+		return topicKey[i+1:]
+	}
+	return topicKey
+}
+
+// distinctLeaves returns the unique last segments across the siblings list,
+// preserving first-seen order. Siblings without a topic_key are skipped.
+func distinctLeaves(siblings []client.Observation) []string {
+	seen := make(map[string]struct{}, len(siblings))
+	out := make([]string, 0, len(siblings))
+	for _, s := range siblings {
+		if s.TopicKey == nil {
+			continue
+		}
+		leaf := leafOf(*s.TopicKey)
+		if leaf == "" {
+			continue
+		}
+		if _, ok := seen[leaf]; ok {
+			continue
+		}
+		seen[leaf] = struct{}{}
+		out = append(out, leaf)
+	}
+	return out
 }
 
 // siblingHref builds /m/{id}?from=/p/{project}?topic_key_prefix={prefix} so
@@ -55,21 +94,41 @@ func siblingHref(siblingID int64, project, prefix string) string {
 }
 
 templ ObservationDetail(o *client.Observation, renderMD bool, back string, siblings []client.Observation, siblingsPrefix string, hasMoreSiblings bool) {
-	@Layout(o.Title) {
+	@Layout(LayoutData{Title: o.Title, Crumbs: detailCrumbs(o)}) {
 		<a href={ templ.SafeURL(backOrRoot(back)) } class="obs-back-link">← back</a>
 		<article class="obs-detail">
 			<div class="detail-grid">
 				<section class="obs-detail__main">
-					<header class="obs-detail__head">
-						<h1 class="obs-detail__title">{ o.Title }</h1>
-						<div class="view-toggle">
+					<header class="obs-detail__head detail-head">
+						<div class="detail-head__row">
+							<span class="type-badge" data-type={ o.Type }>{ TypeMetaOf(o.Type).Label }</span>
+							<span class="detail-head__id mono">{ fmt.Sprintf("#%d", o.ID) }</span>
+							<span class="detail-head__dot" aria-hidden="true">·</span>
+							<span class="detail-head__time mono">{ render.FormatDate(o.CreatedAt) }</span>
+							<span class="detail-head__dot" aria-hidden="true">·</span>
+							<span class="detail-head__time mono" title={ render.FormatDateTime(o.CreatedAt) }>{ render.TimeAgoNow(o.CreatedAt) }</span>
+							if o.RevisionCount > 0 {
+								<span class="detail-head__dot" aria-hidden="true">·</span>
+								<span class="detail-head__rev mono">{ fmt.Sprintf("rev %d", o.RevisionCount) }</span>
+							}
+							<span class="detail-head__spacer"></span>
 							@viewToggle(o.ID, renderMD)
-							<span class="type-badge">{ o.Type }</span>
 						</div>
+						<h1 class="obs-detail__title detail-head__title">{ o.Title }</h1>
+						if o.TopicKey != nil && *o.TopicKey != "" {
+							<div class="detail-head__topic">
+								if o.Project != nil && hasSlash(*o.TopicKey) {
+									<a class="topic-pill topic-pill--md" href={ templ.SafeURL(topicKeyPrefixLink(*o.Project, *o.TopicKey)) } aria-label="Filter project by this topic prefix">
+										@topicSegments(*o.TopicKey)
+									</a>
+								} else {
+									<span class="topic-pill topic-pill--md">
+										@topicSegments(*o.TopicKey)
+									</span>
+								}
+							</div>
+						}
 					</header>
-					if len(siblings) > 1 {
-						@siblingsSection(o.ID, siblings, siblingsPrefix, hasMoreSiblings, o.Project)
-					}
 					<div class="obs-detail__body">
 						if renderMD {
 							<div class="markdown">
@@ -82,170 +141,237 @@ templ ObservationDetail(o *client.Observation, renderMD bool, back string, sibli
 				</section>
 				<aside class="meta-sidebar">
 					<div class="meta-card">
-						<div class="meta-grid">
-							if o.Project != nil {
+						<div class="meta-card__head">metadata</div>
+						<dl class="meta-grid">
+							<div class="meta-row">
+								<dt class="meta-row__k mono">id</dt>
+								<dd class="meta-row__v mono">{ fmt.Sprintf("#%d", o.ID) }</dd>
+							</div>
+							<div class="meta-row">
+								<dt class="meta-row__k mono">project</dt>
+								<dd class="meta-row__v">
+									if o.Project != nil && *o.Project != "" {
+										<a class="meta-link mono" href={ templ.SafeURL("/p/" + *o.Project) }>{ *o.Project }</a>
+									} else {
+										<span class="mono">—</span>
+									}
+								</dd>
+							</div>
+							<div class="meta-row">
+								<dt class="meta-row__k mono">scope</dt>
+								<dd class="meta-row__v mono">{ o.Scope }</dd>
+							</div>
+							<div class="meta-row">
+								<dt class="meta-row__k mono">type</dt>
+								<dd class="meta-row__v"><span class="type-badge" data-type={ o.Type }>{ TypeMetaOf(o.Type).Label }</span></dd>
+							</div>
+							<div class="meta-row">
+								<dt class="meta-row__k mono">created_at</dt>
+								<dd class="meta-row__v mono" title={ render.FormatDateTime(o.CreatedAt) }>{ render.FormatDate(o.CreatedAt) }</dd>
+							</div>
+							if o.ToolName != nil && *o.ToolName != "" {
 								<div class="meta-row">
-									<div class="meta-field">
-										<span class="meta-field__label">project</span>
-										<span class="meta-field__value">{ *o.Project }</span>
-									</div>
-								</div>
-							} else {
-								<div class="meta-row">
-									<div class="meta-field">
-										<span class="meta-field__label">project</span>
-										<span class="meta-field__value">—</span>
-									</div>
+									<dt class="meta-row__k mono">tool_name</dt>
+									<dd class="meta-row__v mono">{ *o.ToolName }</dd>
 								</div>
 							}
-							<div class="meta-row">
-								<div class="meta-field">
-									<span class="meta-field__label">scope</span>
-									<span class="meta-field__value">{ o.Scope }</span>
-								</div>
-							</div>
-							<div class="meta-row">
-								<div class="meta-field">
-									<span class="meta-field__label">type</span>
-									<span class="meta-field__value">{ o.Type }</span>
-								</div>
-							</div>
-							if o.TopicKey != nil {
-								<div class="meta-row meta-row--full">
-									<div class="meta-field">
-										<span class="meta-field__label">topic_key</span>
-										<span class="meta-field__value">
-											if o.Project != nil && *o.TopicKey != "" && hasSlash(*o.TopicKey) {
-												<a href={ templ.SafeURL(topicKeyPrefixLink(*o.Project, *o.TopicKey)) } class="meta-link">{ *o.TopicKey }</a>
-											} else {
-												{ *o.TopicKey }
-											}
-										</span>
-									</div>
-								</div>
-							} else {
-								<div class="meta-row meta-row--full">
-									<div class="meta-field">
-										<span class="meta-field__label">topic_key</span>
-										<span class="meta-field__value">—</span>
-									</div>
-								</div>
-							}
-							<div class="meta-row">
-								<div class="meta-field">
-									<span class="meta-field__label">session</span>
-									<span class="meta-field__value">{ o.SessionID }</span>
-								</div>
-							</div>
-							<div class="meta-row">
-								<div class="meta-field">
-									<span class="meta-field__label">created_at</span>
-									<span class="meta-field__value">{ o.CreatedAt }</span>
-								</div>
-							</div>
-							<div class="meta-row">
-								<div class="meta-field">
-									<span class="meta-field__label">revisions</span>
-									<span class="meta-field__value">{ fmt.Sprintf("%d", o.RevisionCount) }</span>
-								</div>
-								<div class="meta-field">
-									<span class="meta-field__label">duplicates</span>
-									<span class="meta-field__value">{ fmt.Sprintf("%d", o.DuplicateCount) }</span>
-								</div>
-							</div>
-							<div class="meta-row">
-								<div class="meta-field">
-									<span class="meta-field__label">last_seen_at</span>
-									<span class="meta-field__value">
-										if o.LastSeenAt != nil {
-											{ *o.LastSeenAt }
+							<div class="meta-row meta-row--full">
+								<dt class="meta-row__k mono">topic_key</dt>
+								<dd class="meta-row__v">
+									if o.TopicKey != nil && *o.TopicKey != "" {
+										if o.Project != nil && hasSlash(*o.TopicKey) {
+											<a href={ templ.SafeURL(topicKeyPrefixLink(*o.Project, *o.TopicKey)) } class="meta-link mono">{ *o.TopicKey }</a>
 										} else {
-											{ o.CreatedAt }
+											<span class="mono">{ *o.TopicKey }</span>
 										}
-									</span>
-								</div>
+									} else {
+										<span class="mono">—</span>
+									}
+								</dd>
 							</div>
-						</div>
+							<div class="meta-row">
+								<dt class="meta-row__k mono">session</dt>
+								<dd class="meta-row__v mono">{ o.SessionID }</dd>
+							</div>
+							<div class="meta-row">
+								<dt class="meta-row__k mono">revisions</dt>
+								<dd class="meta-row__v mono">{ fmt.Sprintf("%d", o.RevisionCount) }</dd>
+							</div>
+							<div class="meta-row">
+								<dt class="meta-row__k mono">duplicates</dt>
+								<dd class="meta-row__v mono">{ fmt.Sprintf("%d", o.DuplicateCount) }</dd>
+							</div>
+							<div class="meta-row">
+								<dt class="meta-row__k mono">last_seen_at</dt>
+								<dd class="meta-row__v mono">
+									if o.LastSeenAt != nil {
+										{ *o.LastSeenAt }
+									} else {
+										{ o.CreatedAt }
+									}
+								</dd>
+							</div>
+						</dl>
 					</div>
+					if siblingsPrefix != "" {
+						@siblingsSection(o.ID, siblings, siblingsPrefix, hasMoreSiblings, o.Project)
+					}
 				</aside>
 			</div>
 		</article>
 	}
 }
 
+// topicSegments renders the segmented pill body shared by the head pill and
+// the meta-row link variants.
+templ topicSegments(topicKey string) {
+	for i, seg := range topicKeySegments(topicKey) {
+		if i > 0 {
+			<span class="topic-pill__sep">/</span>
+		}
+		<span class="topic-pill__seg">{ seg }</span>
+	}
+}
+
+// viewToggle renders both Rendered/Raw tabs always so the user can see the
+// two states. The current state carries aria-current="page" + is-active.
+// SSR honest: clicking either tab reloads to ?raw=1 or the rendered URL.
+templ viewToggle(id int64, renderMD bool) {
+	<div class="view-toggle" aria-label="view mode">
+		if renderMD {
+			<span class="view-toggle__btn is-active" aria-current="page">Rendered</span>
+			<a class="view-toggle__btn" href={ templ.SafeURL(fmt.Sprintf("/observations/%d?raw=1", id)) }>Raw</a>
+		} else {
+			<a class="view-toggle__btn" href={ templ.SafeURL(fmt.Sprintf("/observations/%d", id)) }>Rendered</a>
+			<span class="view-toggle__btn is-active" aria-current="page">Raw</span>
+		}
+	</div>
+}
+
 templ siblingsSection(currentID int64, siblings []client.Observation, prefix string, hasMore bool, project *string) {
-	<section id="siblings-section" class="siblings-section">
-		<header class="siblings-section__header">
-			Siblings under <span class="siblings-section__prefix">{ prefix }</span>
+	<section id="siblings-section" class="sib-card">
+		<header class="sib-card__head">
+			<span class="sib-card__title">related</span>
+			<span class="sib-card__sub mono">{ prefix }</span>
 		</header>
-		<details>
-			<summary class="siblings-section__summary">
-				<div class="siblings-section__summary-inner">
-					@currentSiblingInline(siblings, currentID)
-					<span class="siblings-section__toggle">▶ show others</span>
-				</div>
-			</summary>
-			<ul class="siblings-section__list">
-				for _, sib := range siblings {
-					if sib.ID != currentID {
-						@siblingRow(sib, currentID, prefix, project)
+		<div class="sib-meta">
+			<span class="mono">{ fmt.Sprintf("%d", len(siblings)) }</span> { pluralize("observation", len(siblings)) } share this prefix
+			<span class="dim"> · </span>
+			<span class="mono">{ fmt.Sprintf("%d", len(distinctLeaves(siblings))) }</span> distinct { pluralize("leaf", len(distinctLeaves(siblings))) }
+			if len(distinctLeaves(siblings)) > 0 {
+				<div class="sib-leaf-row">
+					for _, leaf := range distinctLeaves(siblings) {
+						<span class="sib-leaf mono">{ leaf }</span>
 					}
-				}
-			</ul>
-			if hasMore && project != nil {
-				<a href={ templ.SafeURL("/p/" + *project + "?topic_key_prefix=" + url.QueryEscape(prefix)) } class="siblings-section__see-all">see all →</a>
+				</div>
 			}
-		</details>
+		</div>
+		if len(siblings) > 1 {
+			<details class="sib-card__details">
+				<summary class="sib-card__summary">
+					<ul class="sib-list sib-list--collapsed">
+						@currentSiblingInline(siblings, currentID)
+					</ul>
+					<span class="sib-card__expand-label">
+						<span class="sib-card__expand-collapsed">show { fmt.Sprintf("%d", len(siblings)-1) } in order</span>
+						<span class="sib-card__expand-open">▲ collapse</span>
+					</span>
+				</summary>
+				<ul class="sib-list sib-list--all">
+					for _, sib := range siblings {
+						@siblingListItem(sib, sib.ID == currentID, prefix, project)
+					}
+				</ul>
+				if hasMore && project != nil {
+					<a href={ templ.SafeURL("/p/" + *project + "?topic_key_prefix=" + url.QueryEscape(prefix)) } class="sib-card__see-all">see all in project →</a>
+				}
+			</details>
+		} else {
+			<ul class="sib-list sib-list--pinned">
+				@currentSiblingInline(siblings, currentID)
+			</ul>
+		}
 	</section>
+}
+
+// siblingListItem renders one row in the expanded full list. When isCurrent
+// is true the row uses the --current variant (chip "current", accent rail,
+// tinted bg) and is NOT a link — same treatment as the pinned current.
+templ siblingListItem(sib client.Observation, isCurrent bool, prefix string, project *string) {
+	if isCurrent {
+		<li class="sib-list__item">
+			<div class="sib-item sib-item--current" data-type={ sib.Type }>
+				<span class="sib-item__rail" aria-hidden="true"></span>
+				<span class="sib-item__dot"><span class="type-dot" aria-hidden="true"></span></span>
+				<span class="sib-item__leaf mono">
+					if sib.TopicKey != nil {
+						{ leafOf(*sib.TopicKey) }
+					}
+				</span>
+				<span class="sib-item__title">{ sib.Title }</span>
+				<span class="sib-item__chip">current</span>
+			</div>
+		</li>
+	} else {
+		@siblingItem(sib, prefix, project)
+	}
 }
 
 templ currentSiblingInline(siblings []client.Observation, currentID int64) {
 	for _, sib := range siblings {
 		if sib.ID == currentID {
-			<div class="sibling-row sibling-row--current">
-				<span class="sibling-row__type">{ sib.Type }</span>
-				<span class="sibling-row__title">{ sib.Title }</span>
-				<span class="sibling-row__badge">current</span>
-			</div>
+			<li class="sib-list__item">
+				<div class="sib-item sib-item--current" data-type={ sib.Type }>
+					<span class="sib-item__rail" aria-hidden="true"></span>
+					<span class="sib-item__dot"><span class="type-dot" aria-hidden="true"></span></span>
+					<span class="sib-item__leaf mono">
+						if sib.TopicKey != nil {
+							{ leafOf(*sib.TopicKey) }
+						}
+					</span>
+					<span class="sib-item__title">{ sib.Title }</span>
+					<span class="sib-item__chip">current</span>
+				</div>
+			</li>
 		}
 	}
 }
 
-templ siblingRow(sib client.Observation, currentID int64, prefix string, project *string) {
-	if sib.ID == currentID {
-		<li class="sibling-row sibling-row--current">
-			<span class="sibling-row__type">{ sib.Type }</span>
-			<span class="sibling-row__title">{ sib.Title }</span>
-			<span class="sibling-row__badge">current</span>
-		</li>
-	} else {
-		<li class="sibling-row">
-			if project != nil {
-				<a href={ templ.SafeURL(siblingHref(sib.ID, *project, prefix)) } class="sibling-row__link">
-					<span class="sibling-row__type">{ sib.Type }</span>
-					<span class="sibling-row__title">{ sib.Title }</span>
-				</a>
-			} else {
-				<a href={ templ.SafeURL(fmt.Sprintf("/m/%d", sib.ID)) } class="sibling-row__link">
-					<span class="sibling-row__type">{ sib.Type }</span>
-					<span class="sibling-row__title">{ sib.Title }</span>
-				</a>
-			}
-		</li>
-	}
+templ siblingItem(sib client.Observation, prefix string, project *string) {
+	<li class="sib-list__item">
+		<a class="sib-item" data-type={ sib.Type } href={ templ.SafeURL(siblingItemHref(sib.ID, project, prefix)) }>
+			<span class="sib-item__rail" aria-hidden="true"></span>
+			<span class="sib-item__dot"><span class="type-dot" aria-hidden="true"></span></span>
+			<span class="sib-item__leaf mono">
+				if sib.TopicKey != nil {
+					{ leafOf(*sib.TopicKey) }
+				}
+			</span>
+			<span class="sib-item__title">{ sib.Title }</span>
+			<span class="sib-item__time mono" title={ render.FormatDateTime(sib.CreatedAt) }>{ render.TimeAgoNow(sib.CreatedAt) }</span>
+		</a>
+	</li>
 }
 
-templ viewToggle(id int64, renderMD bool) {
-	if renderMD {
-		<a
-			href={ templ.SafeURL(fmt.Sprintf("/observations/%d?raw=1", id)) }
-			class="view-toggle__link"
-		>View raw</a>
-	} else {
-		<a
-			href={ templ.SafeURL(fmt.Sprintf("/observations/%d", id)) }
-			class="view-toggle__link is-active"
-		>View rendered</a>
+// siblingItemHref builds the navigation target for a non-current sibling.
+// When the parent project is known we prefer the long-form /observations/{id}
+// path with the prefix-preserving from= param (matches the existing test
+// contract); without a project we fall back to the short /m/{id} alias.
+func siblingItemHref(siblingID int64, project *string, prefix string) string {
+	if project == nil || *project == "" {
+		return fmt.Sprintf("/m/%d", siblingID)
 	}
+	return siblingHref(siblingID, *project, prefix)
 }
 
+// pluralize is a tiny English helper for the meta line ("1 observation" vs
+// "3 observations"). Special-cased for "leaf" → "leaves".
+func pluralize(word string, n int) string {
+	if n == 1 {
+		return word
+	}
+	if word == "leaf" {
+		return "leaves"
+	}
+	return word + "s"
+}

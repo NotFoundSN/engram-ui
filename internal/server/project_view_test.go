@@ -9,8 +9,6 @@ import (
 	"github.com/Gentleman-Programming/engram-ui/internal/client"
 )
 
-// --- Phase 5 project view tests ---
-
 // projectViewStub returns a server with project "alpha" having two observations
 // with distinct types and a multi-segment topic_key.
 func projectViewStub() *Server {
@@ -25,7 +23,7 @@ func projectViewStub() *Server {
 	})
 }
 
-// --- Task 5.1: .proj-head + .filter-bar skeleton ---
+// --- proj-head ---
 
 func TestProjectView_ProjHead(t *testing.T) {
 	s := projectViewStub()
@@ -38,25 +36,22 @@ func TestProjectView_ProjHead(t *testing.T) {
 	}
 	body := rr.Body.String()
 
-	// .proj-head must contain project name and observation count
-	projHeadIdx := strings.Index(body, `class="proj-head"`)
-	if projHeadIdx == -1 {
+	if !strings.Contains(body, `class="proj-head"`) {
 		t.Fatal(`expected element with class="proj-head" in body`)
 	}
-
-	// Find the closing tag of proj-head to scope the check
-	tail := body[projHeadIdx:]
-	// Look for closing div within next 600 chars (generous)
-	projHeadBlock := tail[:min(len(tail), 600)]
-
-	if !strings.Contains(projHeadBlock, "alpha") {
+	if !strings.Contains(body, "alpha") {
 		t.Error("expected project name 'alpha' inside .proj-head")
 	}
-	// Observation count (2 observations)
-	if !strings.Contains(projHeadBlock, "2") {
+	// Count "2" must appear in the head along with the "observations" label.
+	if !strings.Contains(body, ">2<") {
 		t.Error("expected observation count '2' inside .proj-head")
 	}
+	if !strings.Contains(body, "observations") {
+		t.Error(`expected the literal "observations" label in .proj-head`)
+	}
 }
+
+// --- filter bar ---
 
 func TestProjectView_FilterBarStructure(t *testing.T) {
 	s := projectViewStub()
@@ -66,29 +61,37 @@ func TestProjectView_FilterBarStructure(t *testing.T) {
 
 	body := rr.Body.String()
 
-	// .filter-bar must be present
-	filterBarIdx := strings.Index(body, `class="filter-bar"`)
-	if filterBarIdx == -1 {
+	if !strings.Contains(body, `class="filter-bar"`) {
 		t.Fatal(`expected element with class="filter-bar" in body`)
 	}
 
-	// Must contain a text input for search
-	if !strings.Contains(body, `type="search"`) && !strings.Contains(body, `name="q"`) {
-		t.Error("expected a text/search input for search in .filter-bar")
+	// Search input for q parameter.
+	if !strings.Contains(body, `type="search"`) || !strings.Contains(body, `name="q"`) {
+		t.Error("expected a search input for q in .filter-bar")
 	}
 
-	// Must contain a sort selector (select element with name="sort")
+	// SVG icon decorating the search input.
+	if !strings.Contains(body, `filter-bar__search-icon`) {
+		t.Error(`expected .filter-bar__search-icon (SVG) inside the search form`)
+	}
+
+	// Type select replaces the old chip row.
+	if !strings.Contains(body, `name="type"`) {
+		t.Error(`expected <select name="type"> filter in .filter-bar`)
+	}
+
+	// Sort select preserved (default IsSearch=false on this stub).
 	if !strings.Contains(body, `name="sort"`) {
-		t.Error("expected sort selector (name=\"sort\") in .filter-bar")
+		t.Error(`expected <select name="sort"> in .filter-bar`)
 	}
 
-	// Must contain .filter-chip-row
-	if !strings.Contains(body, `class="filter-chip-row"`) {
-		t.Error(`expected element with class="filter-chip-row" in .filter-bar`)
+	// Both selects must be wrapped in .filter-bar__selects.
+	if !strings.Contains(body, `class="filter-bar__selects"`) {
+		t.Error(`expected .filter-bar__selects container around type/sort selects`)
 	}
 }
 
-func TestProjectView_NoSelectTypeElement(t *testing.T) {
+func TestProjectView_TypeSelectAllOptionDefault(t *testing.T) {
 	s := projectViewStub()
 	req := httptest.NewRequest(http.MethodGet, "/p/alpha", nil)
 	rr := httptest.NewRecorder()
@@ -96,82 +99,17 @@ func TestProjectView_NoSelectTypeElement(t *testing.T) {
 
 	body := rr.Body.String()
 
-	// The body must NOT contain <select name="type">
-	// templ renders attributes in order: id before name, so check both patterns
-	if strings.Contains(body, `name="type"`) && strings.Contains(body, `<select`) {
-		// Find if the select with name type is present — more precise check
-		selectIdx := strings.Index(body, `<select`)
-		for selectIdx != -1 {
-			selectEnd := strings.Index(body[selectIdx:], ">")
-			if selectEnd != -1 {
-				selectTag := body[selectIdx : selectIdx+selectEnd+1]
-				if strings.Contains(selectTag, `name="type"`) {
-					t.Error("body must NOT contain <select name=\"type\"> — chips should replace it")
-					break
-				}
-			}
-			next := strings.Index(body[selectIdx+1:], `<select`)
-			if next == -1 {
-				break
-			}
-			selectIdx = selectIdx + 1 + next
-		}
+	// When no ?type= is set, the "All types" option must be the selected one.
+	// templ renders `selected` as the bare attribute when truthy.
+	if !strings.Contains(body, `<option value="" selected`) {
+		t.Error(`expected default "All types" option to be selected (value="" selected)`)
+	}
+	if !strings.Contains(body, "All types") {
+		t.Error(`expected the "All types" option label`)
 	}
 }
 
-// --- Task 5.2: .filter-chip-row replaces <select> ---
-
-func TestProjectView_ChipsReplaceSelect(t *testing.T) {
-	s := projectViewStub()
-	req := httptest.NewRequest(http.MethodGet, "/p/alpha", nil)
-	rr := httptest.NewRecorder()
-	s.Handler().ServeHTTP(rr, req)
-
-	body := rr.Body.String()
-
-	// .filter-chip-row must be present
-	chipRowIdx := strings.Index(body, `class="filter-chip-row"`)
-	if chipRowIdx == -1 {
-		t.Fatal(`expected element with class="filter-chip-row" in body`)
-	}
-
-	// Must contain anchor chips (class="chip")
-	if !strings.Contains(body, `class="chip`) {
-		t.Error("expected anchor chips with class=\"chip\" in .filter-chip-row")
-	}
-
-	// Must contain an "all" reset chip
-	if !strings.Contains(body, "all") {
-		t.Error("expected an 'all' reset chip in .filter-chip-row")
-	}
-
-	// No <select name="type"> should be in the body
-	if strings.Contains(body, `<select`) {
-		// Only the sort select is allowed
-		selectCount := strings.Count(body, "<select")
-		// There should be exactly 1 select (the sort select), not one for type
-		if strings.Count(body, `name="type"`) > 0 && strings.Contains(body, `<select`) {
-			// Verify no select has name="type"
-			idx := strings.Index(body, "<select")
-			for idx != -1 {
-				end := strings.Index(body[idx:], ">")
-				if end != -1 {
-					tag := body[idx : idx+end+1]
-					if strings.Contains(tag, `name="type"`) {
-						t.Errorf("found <select name=\"type\"> but it should be replaced with chips (found %d selects total)", selectCount)
-					}
-				}
-				next := strings.Index(body[idx+1:], "<select")
-				if next == -1 {
-					break
-				}
-				idx = idx + 1 + next
-			}
-		}
-	}
-}
-
-func TestProjectView_ActiveChipMarked(t *testing.T) {
+func TestProjectView_TypeSelectActiveSelected(t *testing.T) {
 	s := newWithClient(&stubEngramClient{
 		statsOut: &client.Stats{Projects: []string{"alpha"}},
 		recentOut: []client.Observation{
@@ -184,105 +122,39 @@ func TestProjectView_ActiveChipMarked(t *testing.T) {
 
 	body := rr.Body.String()
 
-	// The decision chip must have is-active class
-	if !strings.Contains(body, `is-active`) {
-		t.Error("expected is-active class on the active chip")
-	}
-
-	// The decision chip must have aria-current="page"
-	if !strings.Contains(body, `aria-current="page"`) {
-		t.Error("expected aria-current=\"page\" on the active chip")
-	}
-
-	// Find the chip for "decision" specifically
-	// Look for a chip link that contains "decision" and has is-active
-	decisionChipFound := false
-	searchIn := body
-	for {
-		chipIdx := strings.Index(searchIn, `class="chip`)
-		if chipIdx == -1 {
-			break
-		}
-		// Find the end of this anchor tag (up to </a>)
-		aEnd := strings.Index(searchIn[chipIdx:], "</a>")
-		if aEnd == -1 {
-			break
-		}
-		chipBlock := searchIn[chipIdx : chipIdx+aEnd+4]
-		if strings.Contains(chipBlock, "decision") && strings.Contains(chipBlock, "is-active") {
-			decisionChipFound = true
-			break
-		}
-		searchIn = searchIn[chipIdx+1:]
-	}
-	if !decisionChipFound {
-		t.Error("expected chip for 'decision' type with is-active class")
+	// The decision option must be marked selected; default empty option must not.
+	if !strings.Contains(body, `<option value="decision" selected`) {
+		t.Error(`expected the "decision" option to be selected when ?type=decision`)
 	}
 }
 
-func TestProjectView_AllChipActiveWhenNoType(t *testing.T) {
-	s := projectViewStub()
-	req := httptest.NewRequest(http.MethodGet, "/p/alpha", nil)
-	rr := httptest.NewRecorder()
-	s.Handler().ServeHTTP(rr, req)
-
-	body := rr.Body.String()
-
-	// Find the "all" chip and verify it has is-active
-	allChipFound := false
-	searchIn := body
-	for {
-		chipIdx := strings.Index(searchIn, `class="chip`)
-		if chipIdx == -1 {
-			break
-		}
-		aEnd := strings.Index(searchIn[chipIdx:], "</a>")
-		if aEnd == -1 {
-			break
-		}
-		chipBlock := searchIn[chipIdx : chipIdx+aEnd+4]
-		if strings.Contains(chipBlock, "all") && strings.Contains(chipBlock, "is-active") {
-			allChipFound = true
-			break
-		}
-		searchIn = searchIn[chipIdx+1:]
-	}
-	if !allChipFound {
-		t.Error("expected 'all' chip to have is-active class when no ?type= is set")
-	}
-}
-
-func TestProjectView_ChipHrefsPreserveParams(t *testing.T) {
+func TestProjectView_TypeSelectPreservesParams(t *testing.T) {
 	s := newWithClient(&stubEngramClient{
 		statsOut: &client.Stats{Projects: []string{"alpha"}},
 		recentOut: []client.Observation{
 			{ID: 1, Type: "decision", Title: "D1", Content: "c", CreatedAt: "2026-01-01"},
 		},
 	})
-	// Request with q, sort, and topic_key_prefix active
 	req := httptest.NewRequest(http.MethodGet, "/p/alpha?q=foo&sort=date_asc&topic_key_prefix=sdd/auth/", nil)
 	rr := httptest.NewRecorder()
 	s.Handler().ServeHTTP(rr, req)
 
 	body := rr.Body.String()
 
-	// Each chip's href must include q=foo, sort=date_asc, topic_key_prefix
-	// The projectFilterHref helper encodes these — check that at least one chip href
-	// contains the preserved params
-	if !strings.Contains(body, "q=foo") {
-		t.Error("expected q=foo preserved in chip hrefs")
+	// Each filter form must carry the other params as hidden inputs so a
+	// select change keeps the current state.
+	if !strings.Contains(body, `<input type="hidden" name="q" value="foo"`) {
+		t.Error(`expected q preserved as a hidden input in filter forms`)
 	}
-	if !strings.Contains(body, "sort=date_asc") {
-		t.Error("expected sort=date_asc preserved in chip hrefs")
+	if !strings.Contains(body, `<input type="hidden" name="sort" value="date_asc"`) {
+		t.Error(`expected sort preserved as a hidden input in filter forms`)
 	}
-	if !strings.Contains(body, "topic_key_prefix") {
-		t.Error("expected topic_key_prefix preserved in chip hrefs")
+	if !strings.Contains(body, `<input type="hidden" name="topic_key_prefix" value="sdd/auth/"`) {
+		t.Error(`expected topic_key_prefix preserved as a hidden input`)
 	}
 }
 
-// --- Task 5.3: .prefix-chip class (existing activePrefixChip, just verify classes) ---
-// The existing test TestHandleProject_ActivePrefixChipRenders already covers id="prefix-chip".
-// We verify the new .prefix-chip class is used in addition.
+// --- prefix chip ---
 
 func TestProjectView_PrefixChipUsesDesignClass(t *testing.T) {
 	k := "sdd/auth/spec"
@@ -298,18 +170,15 @@ func TestProjectView_PrefixChipUsesDesignClass(t *testing.T) {
 
 	body := rr.Body.String()
 
-	// Must still have id="prefix-chip" (existing test contract)
 	if !strings.Contains(body, `id="prefix-chip"`) {
-		t.Error(`expected id="prefix-chip" in body when topic_key_prefix is active`)
+		t.Error(`expected id="prefix-chip" when topic_key_prefix is active`)
 	}
-
-	// Must use .prefix-chip class
 	if !strings.Contains(body, `class="prefix-chip"`) {
-		t.Error(`expected class="prefix-chip" in the prefix chip element`)
+		t.Error(`expected class="prefix-chip"`)
 	}
 }
 
-// --- Task 5.4: .obs-list + .obs-row + segmented .topic-pill ---
+// --- obs list / row ---
 
 func TestProjectView_ObsRowsRendered(t *testing.T) {
 	s := projectViewStub()
@@ -319,18 +188,16 @@ func TestProjectView_ObsRowsRendered(t *testing.T) {
 
 	body := rr.Body.String()
 
-	// .obs-list must be present
 	if !strings.Contains(body, `class="obs-list"`) {
 		t.Error(`expected element with class="obs-list" in body`)
 	}
 
-	// Each observation must be in a .obs-row element
-	obsRowCount := strings.Count(body, `class="obs-row"`)
-	if obsRowCount < 2 {
-		t.Errorf("expected at least 2 .obs-row elements, got %d", obsRowCount)
+	// Two observations → two anchors with class="obs-row".
+	if got := strings.Count(body, `class="obs-row"`); got < 2 {
+		t.Errorf("expected at least 2 .obs-row anchors, got %d", got)
 	}
 
-	// Both observation titles must appear
+	// Both observation titles must appear.
 	if !strings.Contains(body, "Auth Model Design") {
 		t.Error("expected observation title 'Auth Model Design' in body")
 	}
@@ -339,8 +206,72 @@ func TestProjectView_ObsRowsRendered(t *testing.T) {
 	}
 }
 
+func TestProjectView_ObsRowRichColumns(t *testing.T) {
+	s := projectViewStub()
+	req := httptest.NewRequest(http.MethodGet, "/p/alpha", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+
+	// Index column carries zero-padded numbers (01, 02, …).
+	if !strings.Contains(body, `class="obs-row__idx mono"`) {
+		t.Error(`expected .obs-row__idx column`)
+	}
+	if !strings.Contains(body, ">01<") {
+		t.Error(`expected the "01" index for the first row`)
+	}
+	if !strings.Contains(body, ">02<") {
+		t.Error(`expected the "02" index for the second row`)
+	}
+
+	// Type dot + type label.
+	if !strings.Contains(body, `class="obs-row__dot"`) {
+		t.Error(`expected .obs-row__dot column`)
+	}
+	if !strings.Contains(body, `class="type-dot"`) {
+		t.Error(`expected nested .type-dot element`)
+	}
+	if !strings.Contains(body, `class="obs-row__type mono"`) {
+		t.Error(`expected .obs-row__type column`)
+	}
+
+	// ID column shows #<id>.
+	if !strings.Contains(body, `class="obs-row__id mono"`) {
+		t.Error(`expected .obs-row__id column`)
+	}
+	if !strings.Contains(body, "#1") || !strings.Contains(body, "#2") {
+		t.Error(`expected "#1" and "#2" id labels`)
+	}
+
+	// Time column carries the absolute timestamp in the title attribute via
+	// render.FormatDateTime — "2026-01-02" parses to "Jan 2, 2026 00:00 UTC".
+	if !strings.Contains(body, `class="obs-row__time mono"`) {
+		t.Error(`expected .obs-row__time column`)
+	}
+	if !strings.Contains(body, "Jan 2, 2026") {
+		t.Error(`expected formatted timestamp "Jan 2, 2026" in row tooltip`)
+	}
+}
+
+func TestProjectView_ObsRowDataTypeAttribute(t *testing.T) {
+	s := projectViewStub()
+	req := httptest.NewRequest(http.MethodGet, "/p/alpha", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+
+	// Each row's anchor must carry data-type so CSS resolves the right hue.
+	if !strings.Contains(body, `data-type="architecture"`) {
+		t.Error(`expected data-type="architecture" on a row anchor`)
+	}
+	if !strings.Contains(body, `data-type="bugfix"`) {
+		t.Error(`expected data-type="bugfix" on a row anchor`)
+	}
+}
+
 func TestProjectView_TopicPillSegmented(t *testing.T) {
-	// Observation with topic_key = "architecture/auth-model/design" (3 segments)
 	tk := "architecture/auth-model/design"
 	s := newWithClient(&stubEngramClient{
 		statsOut: &client.Stats{Projects: []string{"alpha"}},
@@ -354,26 +285,17 @@ func TestProjectView_TopicPillSegmented(t *testing.T) {
 
 	body := rr.Body.String()
 
-	// .topic-pill must be present
-	if !strings.Contains(body, `class="topic-pill"`) {
-		t.Fatal(`expected element with class="topic-pill" in body`)
+	if !strings.Contains(body, `class="topic-pill topic-pill--xs"`) {
+		t.Fatal(`expected .topic-pill.topic-pill--xs (compact variant for dense rows)`)
 	}
 
-	// Segments must be present as .topic-pill__seg spans
-	segCount := strings.Count(body, `class="topic-pill__seg"`)
-	if segCount < 3 {
-		t.Errorf("expected at least 3 .topic-pill__seg elements for 'architecture/auth-model/design', got %d", segCount)
+	if got := strings.Count(body, `class="topic-pill__seg"`); got < 3 {
+		t.Errorf("expected 3 .topic-pill__seg elements for the 3-segment key, got %d", got)
 	}
-
-	// Each segment text must appear
-	if !strings.Contains(body, "architecture") {
-		t.Error("expected segment 'architecture' in topic pill")
-	}
-	if !strings.Contains(body, "auth-model") {
-		t.Error("expected segment 'auth-model' in topic pill")
-	}
-	if !strings.Contains(body, "design") {
-		t.Error("expected segment 'design' in topic pill")
+	for _, seg := range []string{"architecture", "auth-model", "design"} {
+		if !strings.Contains(body, seg) {
+			t.Errorf("expected segment %q in topic pill", seg)
+		}
 	}
 }
 
@@ -390,12 +312,10 @@ func TestProjectView_TopicPillAbsentWhenNoTopicKey(t *testing.T) {
 
 	body := rr.Body.String()
 
-	// .obs-list and .obs-row must still render
 	if !strings.Contains(body, `class="obs-list"`) {
-		t.Error(`expected obs-list even when observation has no topic_key`)
+		t.Error(`expected obs-list to render even without a topic_key`)
 	}
-	// topic-pill should not render for this obs (no topic_key)
-	if strings.Contains(body, `class="topic-pill"`) {
+	if strings.Contains(body, `class="topic-pill`) {
 		t.Error("topic-pill must not render when observation has no topic_key")
 	}
 }

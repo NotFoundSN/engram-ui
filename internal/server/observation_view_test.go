@@ -163,6 +163,185 @@ func TestObservationView_MarkdownContainer(t *testing.T) {
 	}
 }
 
+// TestObservationView_DetailHeadInlineMeta asserts the detail page renders a
+// .detail-head__row with the type badge + #id + formatted date + time-ago.
+// Optional "rev N" appears only when RevisionCount > 0.
+func TestObservationView_DetailHeadInlineMeta(t *testing.T) {
+	stub := &stubEngramClient{
+		obsOut: &client.Observation{
+			ID:            77,
+			Title:         "Head Meta Test",
+			Content:       "body",
+			Type:          "decision",
+			Scope:         "project",
+			CreatedAt:     "2026-03-15",
+			RevisionCount: 2,
+		},
+	}
+	s := newWithClient(stub)
+	req := httptest.NewRequest(http.MethodGet, "/observations/77", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+
+	if !strings.Contains(body, `class="detail-head__row"`) {
+		t.Error(`expected .detail-head__row container in detail head`)
+	}
+	// #id rendered in the inline row.
+	if !strings.Contains(body, `class="detail-head__id mono"`) || !strings.Contains(body, "#77") {
+		t.Error("expected #77 in .detail-head__id")
+	}
+	// Formatted date present (FormatDate("2026-03-15") -> "Mar 15, 2026").
+	if !strings.Contains(body, "Mar 15, 2026") {
+		t.Error(`expected "Mar 15, 2026" in detail head row`)
+	}
+	// rev N appears because RevisionCount=2.
+	if !strings.Contains(body, "rev 2") {
+		t.Error(`expected "rev 2" indicator in detail head when RevisionCount > 0`)
+	}
+}
+
+// TestObservationView_DetailHeadOmitsRevWhenZero asserts the "rev N" segment
+// is dropped when RevisionCount == 0.
+func TestObservationView_DetailHeadOmitsRevWhenZero(t *testing.T) {
+	stub := &stubEngramClient{
+		obsOut: &client.Observation{
+			ID:            78,
+			Title:         "No Revisions",
+			Content:       "body",
+			Type:          "discovery",
+			Scope:         "project",
+			CreatedAt:     "2026-03-15",
+			RevisionCount: 0,
+		},
+	}
+	s := newWithClient(stub)
+	req := httptest.NewRequest(http.MethodGet, "/observations/78", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+
+	if strings.Contains(body, "rev 0") || strings.Contains(body, ">rev ") {
+		t.Error(`"rev N" segment must NOT render when RevisionCount == 0`)
+	}
+}
+
+// TestObservationView_ViewToggleHasBothTabs asserts the view toggle renders
+// both Rendered and Raw tabs at all times. The current state is marked
+// aria-current="page" and the other state is a link to switch.
+func TestObservationView_ViewToggleHasBothTabs(t *testing.T) {
+	stub := &stubEngramClient{
+		obsOut: &client.Observation{
+			ID:        12,
+			Title:     "Toggle Test",
+			Content:   "## Hello",
+			Type:      "decision",
+			Scope:     "project",
+			CreatedAt: "2026-01-01",
+		},
+	}
+	s := newWithClient(stub)
+
+	t.Run("rendered mode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/observations/12", nil)
+		rr := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rr, req)
+		body := rr.Body.String()
+
+		if !strings.Contains(body, "Rendered") {
+			t.Error(`expected "Rendered" tab label`)
+		}
+		if !strings.Contains(body, "Raw") {
+			t.Error(`expected "Raw" tab label`)
+		}
+		if !strings.Contains(body, `aria-current="page"`) {
+			t.Error("expected aria-current=\"page\" on the active tab")
+		}
+		// Raw must be the navigable one (anchor with href to ?raw=1).
+		if !strings.Contains(body, `href="/observations/12?raw=1"`) {
+			t.Error(`expected Raw tab to link to ?raw=1`)
+		}
+	})
+
+	t.Run("raw mode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/observations/12?raw=1", nil)
+		rr := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rr, req)
+		body := rr.Body.String()
+
+		// In raw mode, the Rendered tab becomes the navigable anchor.
+		if !strings.Contains(body, `href="/observations/12"`) {
+			t.Error(`expected Rendered tab to link to /observations/12 (no raw param)`)
+		}
+	})
+}
+
+// TestObservationView_SidebarShowsIDAndToolName asserts the new sidebar rows
+// (id always, tool_name when present) appear in the meta-card region.
+func TestObservationView_SidebarShowsIDAndToolName(t *testing.T) {
+	tool := "claude-code"
+	stub := &stubEngramClient{
+		obsOut: &client.Observation{
+			ID:        88,
+			Title:     "Sidebar Extras",
+			Content:   "body",
+			Type:      "decision",
+			Scope:     "project",
+			CreatedAt: "2026-01-01",
+			ToolName:  &tool,
+		},
+	}
+	s := newWithClient(stub)
+	req := httptest.NewRequest(http.MethodGet, "/observations/88", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	body := rr.Body.String()
+	sidebarIdx := strings.Index(body, `class="meta-sidebar"`)
+	if sidebarIdx == -1 {
+		t.Fatal(`expected .meta-sidebar in body`)
+	}
+	sidebar := strings.ToLower(body[sidebarIdx:])
+
+	// id row with #88 inside the sidebar
+	if !strings.Contains(sidebar, "#88") {
+		t.Error("expected #88 in sidebar id row")
+	}
+	// tool_name label + value
+	if !strings.Contains(sidebar, "tool_name") {
+		t.Error(`expected "tool_name" label in sidebar`)
+	}
+	if !strings.Contains(sidebar, "claude-code") {
+		t.Error("expected tool_name value 'claude-code' in sidebar")
+	}
+}
+
+// TestObservationView_SidebarHidesToolNameWhenAbsent asserts the tool_name
+// row is omitted entirely when the observation has no ToolName.
+func TestObservationView_SidebarHidesToolNameWhenAbsent(t *testing.T) {
+	stub := &stubEngramClient{
+		obsOut: &client.Observation{
+			ID:        89,
+			Title:     "No Tool",
+			Content:   "body",
+			Type:      "decision",
+			Scope:     "project",
+			CreatedAt: "2026-01-01",
+		},
+	}
+	s := newWithClient(stub)
+	req := httptest.NewRequest(http.MethodGet, "/observations/89", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	body := strings.ToLower(rr.Body.String())
+	if strings.Contains(body, "tool_name") {
+		t.Error("tool_name row must NOT render when ToolName is nil/empty")
+	}
+}
+
 // TestObservationView_RawBypass asserts that when ?raw=1 is set, the body is
 // rendered as raw text without a .markdown wrapper.
 func TestObservationView_RawBypass(t *testing.T) {

@@ -4,6 +4,7 @@ package server
 import (
 	"mime"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -60,6 +61,7 @@ func (s *Server) routes() {
 	s.router.Use(middleware.RequestID)
 	s.router.Use(middleware.Recoverer)
 	s.router.Use(middleware.Logger)
+	s.router.Use(themeMiddleware)
 
 	// Static asset subrouter — registered first so chi's trie never confuses it
 	// with parameterized routes. Long-cache headers applied at the subrouter scope.
@@ -75,6 +77,7 @@ func (s *Server) routes() {
 	// Short alias for agent emission — web templates keep using /observations/{id}.
 	s.router.Get("/m/{id}", s.handleObservation)
 	s.router.Get("/healthz", s.handleHealthz)
+	s.router.Post("/toggle-theme", s.handleToggleTheme)
 }
 
 // longCacheMiddleware sets an immutable long-cache header on all responses it
@@ -84,6 +87,69 @@ func longCacheMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// themeCookieName is the cookie that stores the user's chosen UI theme.
+// Read by themeMiddleware, written by handleToggleTheme.
+const themeCookieName = "theme"
+
+// themeMiddleware reads the theme cookie and attaches the resolved value to
+// the request context. Templ components read it via views.ThemeFromContext
+// so we don't have to thread Theme through every view-specific data struct.
+func themeMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw := ""
+		if c, err := r.Cookie(themeCookieName); err == nil {
+			raw = c.Value
+		}
+		ctx := views.ContextWithTheme(r.Context(), raw)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// handleToggleTheme flips the theme cookie between dark and light, then
+// returns the user to the page they came from. POST-only by route; uses
+// SameSite=Lax to require same-origin form submission as a light CSRF guard.
+//
+// The redirect target is taken from the Referer header but stripped to its
+// path + query — never the scheme/host — so a tampered Referer cannot redirect
+// the user off-origin. Fallback target is "/".
+func (s *Server) handleToggleTheme(w http.ResponseWriter, r *http.Request) {
+	current := views.ThemeFromContext(r.Context())
+	next := "light"
+	if current == "light" {
+		next = "dark"
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     themeCookieName,
+		Value:    next,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   60 * 60 * 24 * 365,
+	})
+	http.Redirect(w, r, safeReferer(r), http.StatusSeeOther)
+}
+
+// safeReferer extracts a same-origin redirect target from the Referer header.
+// Returns "/" when the header is missing, unparseable, or points off-host.
+func safeReferer(r *http.Request) string {
+	ref := r.Referer()
+	if ref == "" {
+		return "/"
+	}
+	u, err := url.Parse(ref)
+	if err != nil || u.Host != r.Host {
+		return "/"
+	}
+	target := u.Path
+	if target == "" {
+		target = "/"
+	}
+	if u.RawQuery != "" {
+		target += "?" + u.RawQuery
+	}
+	return target
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -125,15 +191,22 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 				Limit:   homeSessionFetchLimit,
 			})
 			if fetchErr != nil {
-				// Graceful degradation: keep HasSession=false for this card.
+				// Graceful degradation: card keeps zero values, view renders empty state.
 				return nil
 			}
-			// Client-side filter for session_summary (engram ?type= not supported).
+			// RecentObservations is newest-first — index 0 is the latest activity
+			// regardless of type. We surface it for the colored type dot + time-ago.
+			if len(obs) > 0 {
+				cards[i].LastType = obs[0].Type
+				cards[i].LastActivity = obs[0].CreatedAt
+			}
+			// Scan for the first session_summary in the window for the preview line.
+			// Decoupled from LastType so the preview stays meaningful even when the
+			// latest activity is some other type.
 			for _, o := range obs {
 				if o.Type == "session_summary" {
 					cards[i].HasSession = true
 					cards[i].SessionPreview = render.Truncate(o.Content, homePreviewMaxRunes)
-					cards[i].LastActivity = o.CreatedAt
 					break
 				}
 			}
@@ -143,7 +216,21 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	// errgroup.Wait never returns non-nil here (errors are absorbed above).
 	_ = g.Wait()
 
-	_ = views.Home(views.HomeData{Cards: cards}).Render(r.Context(), w)
+	// LatestUpdate is the max CreatedAt across all cards. RFC3339 + date-only
+	// ISO strings both sort lexicographically by chronology, so plain `>` works.
+	latest := ""
+	for _, c := range cards {
+		if c.LastActivity > latest {
+			latest = c.LastActivity
+		}
+	}
+
+	_ = views.Home(views.HomeData{
+		Cards:           cards,
+		NumProjects:     len(projects),
+		NumObservations: stats.TotalObservations,
+		LatestUpdate:    latest,
+	}).Render(r.Context(), w)
 }
 
 func (s *Server) handleProject(w http.ResponseWriter, r *http.Request) {
@@ -246,6 +333,11 @@ const siblingsCap = 20
 // observation's topic_key has ≥2 `/` (3+ segments). Returns the sibling slice
 // sorted by created_at asc, the prefix used for the lookup, and a hasMore
 // flag if more siblings exist beyond the cap.
+//
+// The current observation is always included in the returned slice when the
+// prefix is non-empty, even if it was older than the recent-batch limit. The
+// detail view pins the current item at the top of the sib-card so callers
+// rely on it being present.
 func (s *Server) computeSiblings(obs *client.Observation) ([]client.Observation, string, bool) {
 	if obs == nil || obs.TopicKey == nil {
 		return nil, "", false
@@ -267,26 +359,50 @@ func (s *Server) computeSiblings(obs *client.Observation) ([]client.Observation,
 		Limit:   200,
 	})
 	if err != nil {
-		return nil, prefix, false
+		// Even on fetch error, surface a sib-card showing the current obs alone
+		// — better than dropping the panel entirely.
+		return []client.Observation{*obs}, prefix, false
 	}
 	// Filter by prefix.
 	matched := make([]client.Observation, 0, len(recent))
+	currentFound := false
 	for _, o := range recent {
 		if o.TopicKey == nil {
 			continue
 		}
-		if strings.HasPrefix(*o.TopicKey, prefix) {
-			matched = append(matched, o)
+		if !strings.HasPrefix(*o.TopicKey, prefix) {
+			continue
 		}
+		if o.ID == obs.ID {
+			currentFound = true
+		}
+		matched = append(matched, o)
+	}
+	// Guarantee the current obs is present even when it predates the recent batch.
+	if !currentFound {
+		matched = append(matched, *obs)
 	}
 	// Sort by created_at asc.
 	sort.Slice(matched, func(i, j int) bool {
 		return matched[i].CreatedAt < matched[j].CreatedAt
 	})
-	// Cap at siblingsCap.
+	// Cap at siblingsCap, but pin the current obs so it survives the trim.
 	hasMore := len(matched) > siblingsCap
 	if hasMore {
-		matched = matched[:siblingsCap]
+		// Keep the first siblingsCap items, but if that drops the current obs,
+		// swap it in so the pinned row in the view still has data.
+		trimmed := matched[:siblingsCap]
+		stillHas := false
+		for _, o := range trimmed {
+			if o.ID == obs.ID {
+				stillHas = true
+				break
+			}
+		}
+		if !stillHas {
+			trimmed[siblingsCap-1] = *obs
+		}
+		matched = trimmed
 	}
 	return matched, prefix, hasMore
 }

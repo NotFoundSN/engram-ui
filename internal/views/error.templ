@@ -1,7 +1,7 @@
 package views
 
 templ ErrorPage(message, detail string) {
-	@Layout("Error") {
+	@Layout(LayoutData{Title: "Error"}) {
 		<section class="error-page">
 			<h1 class="error-page__title">{ message }</h1>
 			<pre class="error-page__body">{ detail }</pre>

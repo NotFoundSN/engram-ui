@@ -2,39 +2,71 @@ package views
 
 import (
 	"fmt"
+
+	"github.com/Gentleman-Programming/engram-ui/internal/render"
 )
 
 type HomeData struct {
-	Cards []ProjectCard
+	Cards           []ProjectCard
+	NumProjects     int    // len(stats.Projects)
+	NumObservations int    // stats.TotalObservations
+	LatestUpdate    string // ISO of the most recent CreatedAt across all cards; empty when no activity
 }
 
 type ProjectCard struct {
 	Name           string
-	SessionPreview string // truncated to 140 runes (rune-safe); empty when HasSession=false
-	HasSession     bool
-	LastActivity   string // CreatedAt of the most recent session_summary; empty when HasSession=false
+	SessionPreview string // truncated session_summary content; empty when HasSession=false
+	HasSession     bool   // a session_summary exists in the recent fetch window
+	LastType       string // type of the most recent observation of ANY kind; empty when project has no recent obs
+	LastActivity   string // CreatedAt of the most recent observation of ANY kind; empty when project has no recent obs
 }
 
 templ Home(d HomeData) {
-	@Layout("Home") {
-		if len(d.Cards) == 0 {
-			@emptyHome()
-		} else {
-			<div class="proj-grid">
-				for _, c := range d.Cards {
-					@projectCard(c)
+	@Layout(LayoutData{Title: "Home"}) {
+		<section class="page page--home">
+			<header class="page__title-row">
+				<h1 class="page__title">projects</h1>
+				if d.NumProjects > 0 {
+					<p class="page__sub">
+						<span class="mono">{ fmt.Sprintf("%d", d.NumProjects) }</span> active
+						<span class="dim"> · </span>
+						<span class="mono">{ fmt.Sprintf("%d", d.NumObservations) }</span> observations
+						if d.LatestUpdate != "" {
+							<span class="dim"> · </span>
+							updated
+							<span class="mono" title={ render.FormatDateTime(d.LatestUpdate) }>{ render.TimeAgoNow(d.LatestUpdate) }</span>
+						}
+					</p>
 				}
-			</div>
-		}
+			</header>
+			if len(d.Cards) == 0 {
+				@emptyHome()
+			} else {
+				<div class="proj-grid">
+					for _, c := range d.Cards {
+						@projectCard(c)
+					}
+				</div>
+			}
+		</section>
 	}
 }
 
 templ projectCard(c ProjectCard) {
-	<a class="proj-card" href={ templ.SafeURL(fmt.Sprintf("/p/%s", c.Name)) }>
+	<a
+		class="proj-card"
+		href={ templ.SafeURL(fmt.Sprintf("/p/%s", c.Name)) }
+		if c.LastType != "" {
+			data-type={ c.LastType }
+		}
+	>
 		<header class="proj-card__head">
 			<span class="proj-card__name">{ c.Name }</span>
-			if c.LastActivity != "" {
-				<span class="proj-card__activity">{ c.LastActivity }</span>
+			if c.LastType != "" {
+				<span class="proj-card__activity">
+					<span class="type-dot" aria-hidden="true"></span>
+					<span class="proj-card__activity-label">{ TypeMetaOf(c.LastType).Label }</span>
+				</span>
 			}
 		</header>
 		<div class="proj-card__body">
@@ -44,6 +76,13 @@ templ projectCard(c ProjectCard) {
 				<p class="proj-card__preview proj-card__preview--empty">No session yet</p>
 			}
 		</div>
+		if c.LastActivity != "" {
+			<footer class="proj-card__foot">
+				<span class="proj-card__time mono" title={ render.FormatDateTime(c.LastActivity) }>
+					{ render.TimeAgoNow(c.LastActivity) }
+				</span>
+			</footer>
+		}
 	</a>
 }
 

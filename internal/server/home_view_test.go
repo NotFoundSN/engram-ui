@@ -43,11 +43,12 @@ func TestHomeView_RendersProjGrid(t *testing.T) {
 	}
 }
 
-// TestHomeView_CardContent asserts that each .proj-card shows the project name,
-// activity timestamp and a preview snippet from the latest observation.
+// TestHomeView_CardContent asserts that each .proj-card shows the project
+// name, a formatted activity timestamp (tooltip), a colored type-hue, and a
+// preview snippet from the latest session_summary.
 func TestHomeView_CardContent(t *testing.T) {
 	stub := &stubEngramClient{
-		statsOut: &client.Stats{Projects: []string{"myproj"}},
+		statsOut: &client.Stats{Projects: []string{"myproj"}, TotalObservations: 1},
 		recentByProject: map[string][]client.Observation{
 			"myproj": {
 				{ID: 1, Type: "session_summary", Title: "Session title", Content: "Hello preview content", CreatedAt: "2026-03-15"},
@@ -74,9 +75,21 @@ func TestHomeView_CardContent(t *testing.T) {
 		t.Error("expected project name 'myproj' in card")
 	}
 
-	// Activity timestamp must appear (via .proj-card__activity or .proj-card__time)
-	if !strings.Contains(body, "2026-03-15") {
-		t.Error("expected activity timestamp '2026-03-15' in card")
+	// Activity timestamp must appear in the foot tooltip as a formatted date.
+	// FormatDateTime("2026-03-15") → "Mar 15, 2026 00:00 UTC".
+	if !strings.Contains(body, "Mar 15, 2026") {
+		t.Error("expected formatted activity timestamp 'Mar 15, 2026' in card tooltip")
+	}
+
+	// Card must carry data-type so CSS can pick up the right --type-hue for
+	// the rail + dot. Stub uses session_summary as the last observation.
+	if !strings.Contains(body, `data-type="session_summary"`) {
+		t.Error(`expected data-type="session_summary" attribute on the card anchor`)
+	}
+
+	// Type dot + label appear in the head when LastType is set.
+	if !strings.Contains(body, `class="type-dot"`) {
+		t.Error("expected .type-dot element in card head")
 	}
 
 	// Preview snippet must appear inside .proj-card__preview
@@ -85,6 +98,48 @@ func TestHomeView_CardContent(t *testing.T) {
 	}
 	if !strings.Contains(body, "Hello preview content") {
 		t.Error("expected preview snippet 'Hello preview content' in card")
+	}
+}
+
+// TestHomeView_TitleRow asserts the page-level title row: "projects" h1 plus
+// the subtitle with N active / M observations / updated counters.
+func TestHomeView_TitleRow(t *testing.T) {
+	stub := &stubEngramClient{
+		statsOut: &client.Stats{
+			Projects:          []string{"alpha", "beta"},
+			TotalObservations: 42,
+		},
+		recentByProject: map[string][]client.Observation{
+			"alpha": {{ID: 1, Type: "decision", Title: "T", Content: "c", CreatedAt: "2026-03-15"}},
+			"beta":  {{ID: 2, Type: "pattern", Title: "T", Content: "c", CreatedAt: "2026-03-14"}},
+		},
+		recentByProjectErr: map[string]error{},
+	}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+
+	if !strings.Contains(body, `class="page__title"`) {
+		t.Error("expected .page__title element on home")
+	}
+	if !strings.Contains(body, ">projects<") {
+		t.Error(`expected the title text "projects"`)
+	}
+	if !strings.Contains(body, ">2<") {
+		t.Error("expected the '2 active' counter in the subtitle")
+	}
+	if !strings.Contains(body, ">42<") {
+		t.Error("expected the '42 observations' counter in the subtitle")
+	}
+	if !strings.Contains(body, "active") || !strings.Contains(body, "observations") {
+		t.Error("expected 'active' and 'observations' labels in subtitle")
 	}
 }
 

@@ -401,9 +401,7 @@ func TestHandleProject_TopicKeyPrefixFilter(t *testing.T) {
 func TestHandleProject_TopicKeyPrefixPreservedInForms(t *testing.T) {
 	// When ?topic_key_prefix= is active, every filter form on the page must
 	// carry it as a hidden input so submitting one form does not drop the
-	// active prefix filter. Phase 5 replaced the type filter <select> form
-	// with anchor chips, so there are now 2 forms: search and sort.
-	// Each chip's href already encodes topic_key_prefix via projectFilterHref.
+	// active prefix filter. There are 3 forms: search, type, and sort.
 	k := "sdd/auth/spec"
 	obs := []client.Observation{
 		{ID: 1, Type: "spec", Title: "Auth Spec", Content: "c", CreatedAt: "2026-01-01", TopicKey: &k},
@@ -423,18 +421,11 @@ func TestHandleProject_TopicKeyPrefixPreservedInForms(t *testing.T) {
 	}
 	body := rr.Body.String()
 
-	// Hidden inputs must appear in both forms (search and sort).
-	// The type filter is now anchor chips — prefix is carried via href params.
+	// Hidden inputs must appear in all 3 forms (search, type, sort).
 	needle := `type="hidden" name="topic_key_prefix" value="sdd/auth/"`
 	count := strings.Count(body, needle)
-	if count < 2 {
-		t.Errorf("expected hidden topic_key_prefix input in 2 forms (search, sort); found %d occurrences of %q", count, needle)
-	}
-
-	// Additionally, chip hrefs must include topic_key_prefix so navigating
-	// via chips also preserves the filter.
-	if !strings.Contains(body, "topic_key_prefix") {
-		t.Error("expected topic_key_prefix to appear in chip hrefs (filter-chip-row)")
+	if count < 3 {
+		t.Errorf("expected hidden topic_key_prefix input in 3 forms (search, type, sort); found %d occurrences of %q", count, needle)
 	}
 }
 
@@ -694,8 +685,8 @@ func alphaStub() *stubEngramClient {
 }
 
 func TestHandleProject_TypeSelectIncludesAllCanonical(t *testing.T) {
-	// Phase 5: type filter is now a .filter-chip-row of anchor chips,
-	// not a <select>. Verify all canonical types appear as chips.
+	// Type filter is a <select> with one option per canonical type plus any
+	// project-present types and a default "All types" option.
 	s := newWithClient(alphaStub())
 	req := httptest.NewRequest(http.MethodGet, "/p/alpha", nil)
 	rr := httptest.NewRecorder()
@@ -706,37 +697,31 @@ func TestHandleProject_TypeSelectIncludesAllCanonical(t *testing.T) {
 	}
 	body := rr.Body.String()
 
-	// Must have a .filter-chip-row (chips replaced the <select>)
-	if !strings.Contains(body, `class="filter-chip-row"`) {
-		t.Error("expected .filter-chip-row in body (chips replaced <select name=\"type\">)")
+	if !strings.Contains(body, `<select id="type" name="type"`) {
+		t.Error(`expected <select id="type" name="type"> in body`)
 	}
 
-	// All 14 canonical types must appear as chip link text
 	canonicalTypes := []string{
 		"architecture", "bugfix", "config", "decision", "design",
 		"discovery", "exploration", "pattern", "plan", "preference",
 		"proposal", "report", "spec", "tasks",
 	}
 	for _, typ := range canonicalTypes {
-		if !strings.Contains(body, typ) {
-			t.Errorf("expected chip for type %q in filter-chip-row", typ)
+		if !strings.Contains(body, `<option value="`+typ+`"`) {
+			t.Errorf("expected <option value=%q> in the type select", typ)
 		}
 	}
 
-	// custom-internal must also appear as a chip
-	if !strings.Contains(body, "custom-internal") {
-		t.Error("expected chip for 'custom-internal' type in filter-chip-row")
+	if !strings.Contains(body, `<option value="custom-internal"`) {
+		t.Error(`expected <option value="custom-internal"> in the type select`)
 	}
 
-	// "all" reset chip must be present
-	if !strings.Contains(body, ">all<") {
-		t.Error(`expected "all" reset chip in filter-chip-row`)
+	if !strings.Contains(body, `<option value="" selected`) {
+		t.Error(`expected default "All types" option (value="") to be selected`)
 	}
 }
 
 func TestHandleProject_TypeSelectMarksActiveSelected(t *testing.T) {
-	// Phase 5: active type is now indicated by .is-active class on the chip
-	// anchor, not selected attribute on an <option>.
 	s := newWithClient(alphaStub())
 	req := httptest.NewRequest(http.MethodGet, "/p/alpha?type=decision", nil)
 	rr := httptest.NewRecorder()
@@ -747,17 +732,12 @@ func TestHandleProject_TypeSelectMarksActiveSelected(t *testing.T) {
 	}
 	body := rr.Body.String()
 
-	// The decision chip must be marked active
-	if !strings.Contains(body, "is-active") {
-		t.Error("expected is-active class on the active type chip")
-	}
-	if !strings.Contains(body, `aria-current="page"`) {
-		t.Error(`expected aria-current="page" on the active type chip`)
+	if !strings.Contains(body, `<option value="decision" selected`) {
+		t.Error(`expected <option value="decision" selected> when ?type=decision`)
 	}
 }
 
 func TestHandleProject_TypeSelectMarksAllTypesSelectedWhenNoFilter(t *testing.T) {
-	// Phase 5: "all" chip should be is-active when no ?type= is set.
 	s := newWithClient(alphaStub())
 	req := httptest.NewRequest(http.MethodGet, "/p/alpha", nil)
 	rr := httptest.NewRecorder()
@@ -765,33 +745,14 @@ func TestHandleProject_TypeSelectMarksAllTypesSelectedWhenNoFilter(t *testing.T)
 
 	body := rr.Body.String()
 
-	// The "all" chip must have is-active class when no type filter is set.
-	// Find "all" chip with is-active in its class.
-	found := false
-	searchIn := body
-	for {
-		chipIdx := strings.Index(searchIn, `class="chip`)
-		if chipIdx == -1 {
-			break
-		}
-		aEnd := strings.Index(searchIn[chipIdx:], "</a>")
-		if aEnd == -1 {
-			break
-		}
-		chipBlock := searchIn[chipIdx : chipIdx+aEnd+4]
-		if strings.Contains(chipBlock, "all") && strings.Contains(chipBlock, "is-active") {
-			found = true
-			break
-		}
-		searchIn = searchIn[chipIdx+1:]
-	}
-	if !found {
-		t.Error(`expected "all" chip to have is-active class when no ?type= filter is set`)
+	if !strings.Contains(body, `<option value="" selected`) {
+		t.Error(`expected default "All types" option (value="") to be selected when no ?type= filter is set`)
 	}
 }
 
 func TestHandleProject_TypeSelectIncludesPhantom(t *testing.T) {
-	// Phase 5: phantom type appears as a chip with is-active when active.
+	// Phantom type — not present in the project's observations — still
+	// appears as a selected option when ?type= names it.
 	s := newWithClient(alphaStub())
 	req := httptest.NewRequest(http.MethodGet, "/p/alpha?type=disappeared", nil)
 	rr := httptest.NewRecorder()
@@ -799,19 +760,14 @@ func TestHandleProject_TypeSelectIncludesPhantom(t *testing.T) {
 
 	body := rr.Body.String()
 
-	// The phantom "disappeared" chip must be present and marked active
-	if !strings.Contains(body, "disappeared") {
-		t.Error("expected phantom type 'disappeared' to appear as a chip in the filter row")
-	}
-	// The active chip must carry is-active (the disappeared chip)
-	if !strings.Contains(body, "is-active") {
-		t.Error("expected is-active class on the 'disappeared' phantom chip")
+	if !strings.Contains(body, `<option value="disappeared" selected`) {
+		t.Error(`expected phantom <option value="disappeared" selected> in type select`)
 	}
 }
 
 func TestHandleProject_TypeSelectFormHasHiddenQAndSort(t *testing.T) {
-	// Phase 5: type filter is now a .filter-chip-row (no form). q and sort
-	// are preserved in each chip's href via projectFilterHref.
+	// q and sort survive a type-select submission via hidden inputs in the
+	// type form (one per other active filter).
 	s := newWithClient(alphaStub())
 	req := httptest.NewRequest(http.MethodGet, "/p/alpha?q=auth&sort=date_asc", nil)
 	rr := httptest.NewRecorder()
@@ -819,56 +775,50 @@ func TestHandleProject_TypeSelectFormHasHiddenQAndSort(t *testing.T) {
 
 	body := rr.Body.String()
 
-	// The .filter-chip-row must be present (no <select name="type">)
-	if !strings.Contains(body, `class="filter-chip-row"`) {
-		t.Fatal("expected .filter-chip-row in body")
+	if !strings.Contains(body, `<select id="type"`) {
+		t.Fatal(`expected <select id="type"> in body`)
 	}
-
-	// Each chip's href must include q=auth and sort=date_asc
-	// (projectFilterHref encodes them into the URL)
-	if !strings.Contains(body, "q=auth") {
-		t.Error("expected q=auth preserved in chip hrefs")
+	if !strings.Contains(body, `<input type="hidden" name="q" value="auth"`) {
+		t.Error(`expected hidden q=auth input in the type filter form`)
 	}
-	if !strings.Contains(body, "sort=date_asc") {
-		t.Error("expected sort=date_asc preserved in chip hrefs")
+	if !strings.Contains(body, `<input type="hidden" name="sort" value="date_asc"`) {
+		t.Error(`expected hidden sort=date_asc input in the type filter form`)
 	}
 }
 
 func TestHandleProject_TypeSelectFormOmitsSortWhenImplicit(t *testing.T) {
+	// When sort is not explicitly set (defaults to date_desc), the type
+	// filter form must NOT carry a hidden sort input — submitting it would
+	// otherwise pin the default sort into the URL unnecessarily.
 	s := newWithClient(alphaStub())
-	// No ?sort= in request — it's implicit (defaulted by server)
 	req := httptest.NewRequest(http.MethodGet, "/p/alpha?type=decision", nil)
 	rr := httptest.NewRecorder()
 	s.Handler().ServeHTTP(rr, req)
 
 	body := rr.Body.String()
 
-	// The type-filter form (identified by id="type-select") must NOT
-	// contain a hidden sort input.
-	selectIdx := strings.Index(body, `id="type-select"`)
+	selectIdx := strings.Index(body, `<select id="type"`)
 	if selectIdx == -1 {
-		// Before phase 3 this will be -1 (chips still rendered) — RED is correct.
-		t.Skip("type select not yet rendered — RED phase")
+		t.Fatal(`expected <select id="type"> in body`)
 	}
-	// Find the opening <form that precedes the select
 	formStart := strings.LastIndex(body[:selectIdx], "<form")
 	if formStart == -1 {
 		t.Fatal("could not find <form before type select")
 	}
-	// Find the closing </form> after the select
 	formEnd := strings.Index(body[selectIdx:], "</form>")
 	if formEnd == -1 {
 		t.Fatal("could not find </form> after type select")
 	}
 	typeFilterForm := body[formStart : selectIdx+formEnd+len("</form>")]
 
-	// Hidden sort input must NOT be inside the type filter form
 	if strings.Contains(typeFilterForm, `type="hidden" name="sort"`) {
 		t.Error(`type filter form must not contain hidden sort input when sort was not explicitly set`)
 	}
 }
 
 func TestHandleProject_TypeSelectFormHasApplyButton(t *testing.T) {
+	// Every filter form keeps a submit button (visually hidden via sr-only)
+	// so JS-disabled clients can still submit the form by pressing Enter.
 	s := newWithClient(alphaStub())
 	req := httptest.NewRequest(http.MethodGet, "/p/alpha", nil)
 	rr := httptest.NewRecorder()
@@ -946,36 +896,6 @@ func TestHandleProject_RowsHaveFromWithExplicitDefaultSort(t *testing.T) {
 	}
 }
 
-func TestHandleProject_NoOnchangeJavaScriptHandler(t *testing.T) {
-	// Phase 5: type filter is now anchor chips — no onchange JS at all
-	// for type filtering. The sort select still uses onchange for convenience,
-	// which is acceptable. Verify the .filter-chip-row contains no onchange.
-	s := newWithClient(alphaStub())
-	req := httptest.NewRequest(http.MethodGet, "/p/alpha", nil)
-	rr := httptest.NewRecorder()
-	s.Handler().ServeHTTP(rr, req)
-
-	body := rr.Body.String()
-
-	// .filter-chip-row must be present (chips replaced the select)
-	chipRowIdx := strings.Index(body, `class="filter-chip-row"`)
-	if chipRowIdx == -1 {
-		t.Fatal(`expected class="filter-chip-row" in body`)
-	}
-
-	// Find the end of the filter-chip-row div to scope the check
-	tail := body[chipRowIdx:]
-	endDiv := strings.Index(tail, "</div>")
-	if endDiv == -1 {
-		t.Fatal("could not find closing </div> after filter-chip-row")
-	}
-	chipRowBlock := tail[:endDiv+6]
-
-	// No chip anchor in the row should have onchange
-	if strings.Contains(chipRowBlock, "onchange") {
-		t.Error("filter-chip-row must not contain onchange attributes — chips are pure anchor links")
-	}
-}
 
 // --- handleObservation v2 tests (FR-5, Scenarios 7-11) ---
 
@@ -1216,9 +1136,11 @@ func TestHandleObservation_SiblingsCollapsedByDefault(t *testing.T) {
 	}
 }
 
-func TestHandleObservation_SiblingsSectionHiddenWhenOnlyCurrent(t *testing.T) {
-	// Only the current obs has the topic_key_prefix → nothing to navigate to.
-	// The entire siblings section must NOT render.
+func TestHandleObservation_SiblingsSectionRendersWhenOnlyCurrent(t *testing.T) {
+	// Even when the current obs is the only thing under the prefix, we still
+	// render the sib-card — pinned with just the current row — so the page
+	// always has the topic-prefix context block. The expand toggle is omitted
+	// because there's nothing else to expand.
 	proj := "alpha"
 	k := "sdd/lonely/spec"
 	obs := []client.Observation{
@@ -1232,8 +1154,16 @@ func TestHandleObservation_SiblingsSectionHiddenWhenOnlyCurrent(t *testing.T) {
 	s.Handler().ServeHTTP(rr, req)
 
 	body := rr.Body.String()
-	if strings.Contains(body, `id="siblings-section"`) {
-		t.Error("siblings section must NOT render when only the current obs matches the prefix")
+
+	if !strings.Contains(body, `id="siblings-section"`) {
+		t.Error(`expected id="siblings-section" to render even when only the current obs matches the prefix`)
+	}
+	if !strings.Contains(body, "Lonely Spec") {
+		t.Error(`expected current obs title in the pinned sib-card`)
+	}
+	// "show N related" toggle MUST NOT render when there are zero non-current siblings.
+	if strings.Contains(body, "show 0 related") {
+		t.Error(`"show 0 related" toggle must NOT render when current is the only sibling`)
 	}
 }
 
@@ -1532,7 +1462,8 @@ func TestLayout_NoTailwindCDN(t *testing.T) {
 	}
 }
 
-// SCN: TestLayout_HeaderChrome — header MUST contain accent dot + wordmark + nav.
+// SCN: TestLayout_HeaderChrome — header MUST contain brand chrome (dot +
+// name + read-only sub) + <nav> with primary actions.
 func TestLayout_HeaderChrome(t *testing.T) {
 	stub := &stubEngramClient{
 		statsOut: &client.Stats{Projects: []string{}},
@@ -1547,8 +1478,14 @@ func TestLayout_HeaderChrome(t *testing.T) {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
 	body := rr.Body.String()
-	if !strings.Contains(body, `class="accent-dot"`) {
-		t.Error(`expected element with class="accent-dot" in response body`)
+	if !strings.Contains(body, `class="brand__dot"`) {
+		t.Error(`expected element with class="brand__dot" in response body`)
+	}
+	if !strings.Contains(body, `class="brand__name"`) {
+		t.Error(`expected element with class="brand__name" in response body`)
+	}
+	if !strings.Contains(body, `class="brand__sub"`) {
+		t.Error(`expected "read-only" sub chip (class="brand__sub") in response body`)
 	}
 	if !strings.Contains(body, "engram-ui") {
 		t.Error("expected text 'engram-ui' inside header")
@@ -1651,4 +1588,118 @@ func TestStaticHandler_NoShadowing(t *testing.T) {
 			t.Errorf("expected non-404 from /p/alpha, got %d", rr.Code)
 		}
 	})
+}
+
+// SCN: TestToggleTheme_FlipsCookie — POST /toggle-theme with no cookie sets
+// theme=light; with theme=light set, it flips back to dark.
+func TestToggleTheme_FlipsCookie(t *testing.T) {
+	stub := &stubEngramClient{statsOut: &client.Stats{Projects: []string{}}}
+	s := newWithClient(stub)
+
+	cases := []struct {
+		name    string
+		cookie  string // value of "theme" cookie on the incoming request; "" = no cookie
+		wantNew string // expected value of the cookie set in the response
+	}{
+		{"no cookie defaults to light", "", "light"},
+		{"dark flips to light", "dark", "light"},
+		{"light flips to dark", "light", "dark"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/toggle-theme", nil)
+			if tc.cookie != "" {
+				req.AddCookie(&http.Cookie{Name: "theme", Value: tc.cookie})
+			}
+			rr := httptest.NewRecorder()
+			s.Handler().ServeHTTP(rr, req)
+
+			if rr.Code != http.StatusSeeOther {
+				t.Fatalf("expected 303, got %d", rr.Code)
+			}
+			var got *http.Cookie
+			for _, c := range rr.Result().Cookies() {
+				if c.Name == "theme" {
+					got = c
+					break
+				}
+			}
+			if got == nil {
+				t.Fatal("expected response to set the theme cookie")
+			}
+			if got.Value != tc.wantNew {
+				t.Errorf("expected theme=%q, got theme=%q", tc.wantNew, got.Value)
+			}
+			if !got.HttpOnly {
+				t.Error("theme cookie must be HttpOnly")
+			}
+			if got.SameSite != http.SameSiteLaxMode {
+				t.Errorf("theme cookie must be SameSite=Lax, got %v", got.SameSite)
+			}
+			if got.Path != "/" {
+				t.Errorf("theme cookie must have Path=/, got %q", got.Path)
+			}
+		})
+	}
+}
+
+// SCN: TestToggleTheme_SafeReferer — same-host Referer is preserved on redirect;
+// cross-origin or empty Referer falls back to "/".
+func TestToggleTheme_SafeReferer(t *testing.T) {
+	stub := &stubEngramClient{statsOut: &client.Stats{Projects: []string{}}}
+	s := newWithClient(stub)
+
+	cases := []struct {
+		name     string
+		referer  string
+		wantLoc  string
+		hostHdr  string // Host of the simulated request — needed to compare against Referer's Host
+	}{
+		{"no referer falls back to /", "", "/", "example.com"},
+		{"same-host path preserved", "http://example.com/p/alpha?q=foo", "/p/alpha?q=foo", "example.com"},
+		{"cross-origin referer rejected", "http://evil.example/steal", "/", "example.com"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/toggle-theme", nil)
+			req.Host = tc.hostHdr
+			if tc.referer != "" {
+				req.Header.Set("Referer", tc.referer)
+			}
+			rr := httptest.NewRecorder()
+			s.Handler().ServeHTTP(rr, req)
+
+			if rr.Code != http.StatusSeeOther {
+				t.Fatalf("expected 303, got %d", rr.Code)
+			}
+			if loc := rr.Header().Get("Location"); loc != tc.wantLoc {
+				t.Errorf("expected Location=%q, got %q", tc.wantLoc, loc)
+			}
+		})
+	}
+}
+
+// SCN: TestLayout_ThemeAttributeAndToggle — every rendered page MUST carry the
+// data-theme attribute on <html> and expose a POST form to /toggle-theme.
+func TestLayout_ThemeAttributeAndToggle(t *testing.T) {
+	stub := &stubEngramClient{statsOut: &client.Stats{Projects: []string{}}}
+	s := newWithClient(stub)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `data-theme="dark"`) {
+		t.Error(`expected <html data-theme="dark"> when no theme cookie is present`)
+	}
+	if !strings.Contains(body, `action="/toggle-theme"`) {
+		t.Error(`expected a form with action="/toggle-theme" in the header`)
+	}
+	if !strings.Contains(body, `class="theme-toggle"`) {
+		t.Error(`expected a button with class="theme-toggle"`)
+	}
 }
