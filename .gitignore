@@ -27,3 +27,10 @@ Thumbs.db
 # Local env
 .env
 .env.local
+
+# UI design references — prototype HTML + extracted sources used as visual
+# reference when aligning the live views with the mock. Kept locally, not
+# tracked.
+engram-ui.html
+.template-decoded.html
+.template-src/
