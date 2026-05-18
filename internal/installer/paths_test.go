@@ -305,37 +305,128 @@ func TestIsStableBinaryPath(t *testing.T) {
 
 func TestStableBinaryPrefixes(t *testing.T) {
 	cases := []struct {
-		name string
-		goos string
-		want int // number of expected prefixes
+		name         string
+		goos         string
+		homeDir      string
+		localAppData string
+		wantContains []string // substrings that MUST appear in at least one prefix
+		wantLen      int
 	}{
 		{
-			name: "Windows prefixes",
-			goos: "windows",
-			want: 3, // LOCALAPPDATA, ProgramFiles, C:\Program Files
+			name:         "Windows prefixes resolve LOCALAPPDATA",
+			goos:         "windows",
+			homeDir:      `C:\Users\user`,
+			localAppData: `C:\Users\user\AppData\Local`,
+			wantContains: []string{
+				`C:\Users\user\AppData\Local\engram-ui\`,
+				`C:\Program Files\`,
+				`C:\Program Files (x86)\`,
+			},
+			wantLen: 3,
 		},
 		{
-			name: "macOS prefixes",
-			goos: "darwin",
-			want: 3, // homebrew, usr/local/bin, ~/.local/bin
+			name:         "macOS prefixes resolve home",
+			goos:         "darwin",
+			homeDir:      "/Users/user",
+			localAppData: "",
+			wantContains: []string{
+				"/opt/homebrew/bin/",
+				"/usr/local/bin/",
+				"/Users/user/.local/bin/",
+			},
+			wantLen: 3,
 		},
 		{
-			name: "Linux prefixes",
-			goos: "linux",
-			want: 3, // /usr/local/bin, /opt/homebrew/bin, ~/.local/bin
+			name:         "Linux prefixes resolve home",
+			goos:         "linux",
+			homeDir:      "/home/user",
+			localAppData: "",
+			wantContains: []string{
+				"/usr/local/bin/",
+				"/opt/homebrew/bin/",
+				"/home/user/.local/bin/",
+			},
+			wantLen: 3,
 		},
 		{
-			name: "unsupported platform",
-			goos: "plan9",
-			want: 0,
+			name:         "unsupported platform",
+			goos:         "plan9",
+			homeDir:      "/home/user",
+			localAppData: "",
+			wantContains: nil,
+			wantLen:      0,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := StableBinaryPrefixes(tc.goos)
-			if len(got) != tc.want {
-				t.Errorf("StableBinaryPrefixes(%q) returned %d prefixes, want %d", tc.goos, len(got), tc.want)
+			got := StableBinaryPrefixes(tc.goos, tc.homeDir, tc.localAppData)
+			if len(got) != tc.wantLen {
+				t.Errorf("StableBinaryPrefixes(%q, %q, %q) returned %d prefixes, want %d (got %v)", tc.goos, tc.homeDir, tc.localAppData, len(got), tc.wantLen, got)
+			}
+			for _, needle := range tc.wantContains {
+				found := false
+				for _, prefix := range got {
+					if prefix == needle {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("StableBinaryPrefixes(%q, %q, %q) missing expected prefix %q (got %v)", tc.goos, tc.homeDir, tc.localAppData, needle, got)
+				}
+			}
+		})
+	}
+}
+
+func TestIsStableBinaryPath_PrefixMatch(t *testing.T) {
+	// Regression: prefix list must catch paths under stable dirs that are NOT
+	// the canonical exact path (e.g. renamed binary, symlink target).
+	cases := []struct {
+		name         string
+		path         string
+		homeDir      string
+		localAppData string
+		goos         string
+		want         bool
+	}{
+		{
+			name:    "Linux renamed binary under ~/.local/bin",
+			path:    "/home/user/.local/bin/engram-ui-dev",
+			homeDir: "/home/user",
+			goos:    "linux",
+			want:    true,
+		},
+		{
+			name:    "macOS renamed binary under ~/.local/bin",
+			path:    "/Users/user/.local/bin/engram-ui-dev",
+			homeDir: "/Users/user",
+			goos:    "darwin",
+			want:    true,
+		},
+		{
+			name:         "Windows renamed binary under LOCALAPPDATA/engram-ui",
+			path:         `C:\Users\user\AppData\Local\engram-ui\engram-ui-dev.exe`,
+			homeDir:      `C:\Users\user`,
+			localAppData: `C:\Users\user\AppData\Local`,
+			goos:         "windows",
+			want:         true,
+		},
+		{
+			name:    "Linux unrelated path under home",
+			path:    "/home/user/Downloads/engram-ui",
+			homeDir: "/home/user",
+			goos:    "linux",
+			want:    false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := IsStableBinaryPath(tc.path, tc.homeDir, tc.localAppData, tc.goos)
+			if got != tc.want {
+				t.Errorf("IsStableBinaryPath(%q, ...) = %v, want %v", tc.path, got, tc.want)
 			}
 		})
 	}

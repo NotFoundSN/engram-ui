@@ -38,7 +38,7 @@ func IsStableBinaryPath(path, homeDir, localAppData, goos string) bool {
 	}
 
 	// Check against stable prefixes
-	prefixes := StableBinaryPrefixes(goos)
+	prefixes := StableBinaryPrefixes(goos, homeDir, localAppData)
 	for _, prefix := range prefixes {
 		prefix = filepath.ToSlash(prefix)
 		if strings.HasPrefix(path, prefix) {
@@ -50,25 +50,27 @@ func IsStableBinaryPath(path, homeDir, localAppData, goos string) bool {
 }
 
 // StableBinaryPrefixes returns the known stable path prefixes for the given OS.
-func StableBinaryPrefixes(goos string) []string {
+// Prefixes are concrete paths (env vars and ~ are resolved using homeDir/localAppData)
+// so they can be matched directly against absolute paths with strings.HasPrefix.
+func StableBinaryPrefixes(goos, homeDir, localAppData string) []string {
 	switch goos {
 	case "windows":
 		return []string{
-			"%LOCALAPPDATA%\\engram-ui",
-			"%ProgramFiles%",
+			localAppData + `\engram-ui\`,
 			`C:\Program Files\`,
+			`C:\Program Files (x86)\`,
 		}
 	case "darwin":
 		return []string{
 			"/opt/homebrew/bin/",
 			"/usr/local/bin/",
-			"/.local/bin/",
+			homeDir + "/.local/bin/",
 		}
 	case "linux":
 		return []string{
 			"/usr/local/bin/",
 			"/opt/homebrew/bin/",
-			"/.local/bin/",
+			homeDir + "/.local/bin/",
 		}
 	default:
 		return nil
