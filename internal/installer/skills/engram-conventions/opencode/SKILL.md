@@ -18,6 +18,15 @@ triggers:
   - engram memory
   - observation save
   - topic_key
+  - guardar en engram
+  - guardar en memoria
+  - buscar en engram
+  - buscar memoria
+  - resumen de sesion
+  - cerrar sesion
+  - clave de tema
+  - tipos de observacion
+  - que tipo usar
 ---
 
 # engram-conventions

@@ -10,6 +10,15 @@ bin/
 *.test
 *.out
 coverage.txt
+coverage
+coverage-installer
+coverage.html
+
+# Skill registry cache
+.atl/.skill-registry.cache.json
+
+# SDD on-disk artifacts (engram store is authoritative)
+sdd/
 
 # Go workspace
 go.work
