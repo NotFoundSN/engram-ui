@@ -13,11 +13,11 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/Gentleman-Programming/engram-ui/internal/client"
-	"github.com/Gentleman-Programming/engram-ui/internal/engramconv"
-	"github.com/Gentleman-Programming/engram-ui/internal/render"
-	"github.com/Gentleman-Programming/engram-ui/internal/static"
-	"github.com/Gentleman-Programming/engram-ui/internal/views"
+	"github.com/NotFoundSN/engram-ui/internal/client"
+	"github.com/NotFoundSN/engram-ui/internal/engramconv"
+	"github.com/NotFoundSN/engram-ui/internal/render"
+	"github.com/NotFoundSN/engram-ui/internal/static"
+	"github.com/NotFoundSN/engram-ui/internal/views"
 )
 
 func init() {

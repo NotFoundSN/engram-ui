@@ -9,7 +9,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/Gentleman-Programming/engram-ui/internal/client"
+	"github.com/NotFoundSN/engram-ui/internal/client"
 )
 
 // stubEngramClient implements engramClient for testing.

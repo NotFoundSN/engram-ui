@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Gentleman-Programming/engram-ui/internal/client"
+	"github.com/NotFoundSN/engram-ui/internal/client"
 )
 
 // --- Task 6.1 ---

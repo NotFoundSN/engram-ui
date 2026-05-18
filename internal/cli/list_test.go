@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Gentleman-Programming/engram-ui/internal/installer"
+	"github.com/NotFoundSN/engram-ui/internal/installer"
 )
 
 func withListSeam(outBuf, errBuf *bytes.Buffer, catalogFn func() ([]installer.Skill, error), fn func()) {

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	eclient "github.com/Gentleman-Programming/engram-ui/internal/client"
+	eclient "github.com/NotFoundSN/engram-ui/internal/client"
 )
 
 func TestIsAlreadyRunning(t *testing.T) {

@@ -14,8 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Gentleman-Programming/engram-ui/internal/client"
-	"github.com/Gentleman-Programming/engram-ui/internal/server"
+	"github.com/NotFoundSN/engram-ui/internal/client"
+	"github.com/NotFoundSN/engram-ui/internal/server"
 )
 
 // alreadyRunningCheck is a function variable for test injection.

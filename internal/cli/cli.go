@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Gentleman-Programming/engram-ui/internal/tui"
+	"github.com/NotFoundSN/engram-ui/internal/tui"
 )
 
 // stdout and stderr are package-level writers, injectable for tests.

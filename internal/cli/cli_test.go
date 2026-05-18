@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Gentleman-Programming/engram-ui/internal/installer"
+	"github.com/NotFoundSN/engram-ui/internal/installer"
 )
 
 func TestDispatch_NoArgs_TTY_LaunchesTUI(t *testing.T) {

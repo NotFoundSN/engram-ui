@@ -11,7 +11,7 @@ import templruntime "github.com/a-h/templ/runtime"
 import (
 	"fmt"
 
-	"github.com/Gentleman-Programming/engram-ui/internal/render"
+	"github.com/NotFoundSN/engram-ui/internal/render"
 )
 
 type HomeData struct {

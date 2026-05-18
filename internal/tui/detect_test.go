@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Gentleman-Programming/engram-ui/internal/installer"
+	"github.com/NotFoundSN/engram-ui/internal/installer"
 )
 
 func TestDetectState_EmptyHome_AllSkillsNotInstalled(t *testing.T) {

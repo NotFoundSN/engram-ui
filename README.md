@@ -9,18 +9,18 @@ Reads engram's data through its public HTTP REST API. Decoupled from engram's in
 ### Homebrew (macOS / Linux)
 
 ```bash
-brew install gentleman-programming/tap/engram-ui
+brew install notfoundsn/tap/engram-ui
 ```
 
 ### Go install
 
 ```bash
-go install github.com/Gentleman-Programming/engram-ui/cmd/engram-ui@latest
+go install github.com/NotFoundSN/engram-ui/cmd/engram-ui@latest
 ```
 
 ### Direct download
 
-Download the binary for your platform from the [Releases page](https://github.com/Gentleman-Programming/engram-ui/releases):
+Download the binary for your platform from the [Releases page](https://github.com/NotFoundSN/engram-ui/releases):
 
 | Platform | Archive |
 |----------|---------|
@@ -66,7 +66,7 @@ engram-ui help               print help
 |--------|-------------|-------------|
 | `claude-code` | Copies the engram-conventions skill into Claude Code's skills directory | `~/.claude/skills/engram-conventions/` |
 | `opencode` | Copies the engram-conventions skill into OpenCode's config directory | `~/.config/opencode/skills/engram-conventions/` |
-| `os-autostart` | Registers engram-ui as an OS-level autostart entry | Windows: `%APPDATA%\...\Startup\engram-ui.bat`<br>macOS: `~/Library/LaunchAgents/com.gentleman-programming.engram-ui.plist`<br>Linux: `~/.config/systemd/user/engram-ui.service` |
+| `os-autostart` | Registers engram-ui as an OS-level autostart entry | Windows: `%APPDATA%\...\Startup\engram-ui.bat`<br>macOS: `~/Library/LaunchAgents/com.notfoundsn.engram-ui.plist`<br>Linux: `~/.config/systemd/user/engram-ui.service` |
 | `remove-autostart` | Removes the OS autostart entry | Same paths as above |
 
 All `setup` subcommands are idempotent — safe to run more than once.
@@ -78,7 +78,7 @@ All `setup` subcommands are idempotent — safe to run more than once.
 The release workflow (`.github/workflows/release.yml`) requires two secrets configured on the repository:
 
 - `GITHUB_TOKEN` — automatically provided by GitHub Actions (no setup needed).
-- `HOMEBREW_TAP_TOKEN` — a Personal Access Token with `repo` scope on the `Gentleman-Programming/homebrew-tap` repository. Create at GitHub → Settings → Developer settings → Personal access tokens.
+- `HOMEBREW_TAP_TOKEN` — a Personal Access Token with `repo` scope on the `NotFoundSN/homebrew-tap` repository. Create at GitHub → Settings → Developer settings → Personal access tokens.
 
 ---
 

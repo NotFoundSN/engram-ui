@@ -13,7 +13,7 @@ package tui
 import (
 	"fmt"
 
-	"github.com/Gentleman-Programming/engram-ui/internal/installer"
+	"github.com/NotFoundSN/engram-ui/internal/installer"
 )
 
 // State describes the lifecycle position of one installable Item.

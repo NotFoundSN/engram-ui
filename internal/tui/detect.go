@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Gentleman-Programming/engram-ui/internal/installer"
+	"github.com/NotFoundSN/engram-ui/internal/installer"
 )
 
 // DetectState returns the current state of an Item on the local filesystem.

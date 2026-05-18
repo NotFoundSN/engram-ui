@@ -13,8 +13,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Gentleman-Programming/engram-ui/internal/client"
-	"github.com/Gentleman-Programming/engram-ui/internal/render"
+	"github.com/NotFoundSN/engram-ui/internal/client"
+	"github.com/NotFoundSN/engram-ui/internal/render"
 )
 
 type ProjectData struct {

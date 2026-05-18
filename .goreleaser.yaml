@@ -26,7 +26,7 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X github.com/Gentleman-Programming/engram-ui/internal/cli.version={{.Version}}
+      - -s -w -X github.com/NotFoundSN/engram-ui/internal/version.version={{.Version}}
 
 archives:
   - formats:
@@ -50,12 +50,12 @@ changelog:
 
 brews:
   - repository:
-      owner: Gentleman-Programming
+      owner: NotFoundSN
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
     name: engram-ui
-    homepage: "https://github.com/Gentleman-Programming/engram-ui"
+    homepage: "https://github.com/NotFoundSN/engram-ui"
     description: "Web viewer for engram persistent memory. Single binary, zero config."
     license: "MIT"
     commit_msg_template: "chore: update engram-ui formula to {{ .Tag }}"

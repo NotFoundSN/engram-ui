@@ -6,7 +6,7 @@ package main
 import (
 	"os"
 
-	"github.com/Gentleman-Programming/engram-ui/internal/cli"
+	"github.com/NotFoundSN/engram-ui/internal/cli"
 )
 
 func main() {

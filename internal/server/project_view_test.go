@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Gentleman-Programming/engram-ui/internal/client"
+	"github.com/NotFoundSN/engram-ui/internal/client"
 )
 
 // projectViewStub returns a server with project "alpha" having two observations

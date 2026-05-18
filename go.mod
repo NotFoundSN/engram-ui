@@ -1,4 +1,4 @@
-module github.com/Gentleman-Programming/engram-ui
+module github.com/NotFoundSN/engram-ui
 
 go 1.25.0
 
