@@ -122,21 +122,49 @@ func TestInstallClaudeCodeSkill_EngramConventions_MultiFile(t *testing.T) {
 }
 
 func TestInstallAutostart(t *testing.T) {
-	tmpAppData := t.TempDir()
+	// Create temp directories for both APPDATA and LOCALAPPDATA
+	tmpDir := t.TempDir()
+	tmpAppData := filepath.Join(tmpDir, "AppData", "Roaming")
+	tmpLocalAppData := filepath.Join(tmpDir, "AppData", "Local")
+	if err := os.MkdirAll(tmpAppData, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(tmpLocalAppData, 0755); err != nil {
+		t.Fatal(err)
+	}
+
 	t.Setenv("APPDATA", tmpAppData)
+	t.Setenv("LOCALAPPDATA", tmpLocalAppData)
+
+	// Create a mock "source" binary that will be copied to stable path
+	sourceDir := filepath.Join(tmpDir, "source")
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	sourcePath := filepath.Join(sourceDir, "engram-ui.exe")
+	if err := os.WriteFile(sourcePath, []byte("mock binary"), 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	orig := evalSymlinks
 	defer func() { evalSymlinks = orig }()
 	evalSymlinks = func() (string, error) {
-		return `C:\fake\engram-ui.exe`, nil
+		return sourcePath, nil
 	}
 
 	result, err := InstallAutostart()
 	if err != nil {
 		t.Fatalf("InstallAutostart(): %v", err)
 	}
+	// Action should reflect the autostart installation (not the stable binary install)
 	if result.Action != ActionInstalled {
 		t.Errorf("InstallAutostart: Action = %q, want ActionInstalled", result.Action)
+	}
+
+	// Verify stable binary was created
+	stablePath := StableBinaryPath(tmpDir, tmpLocalAppData, "windows")
+	if _, err := os.Stat(stablePath); os.IsNotExist(err) {
+		t.Errorf("Stable binary was not created at %q", stablePath)
 	}
 }
 

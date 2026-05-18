@@ -12,7 +12,7 @@ import (
 
 type darwinAutostart struct{}
 
-const darwinPlistLabel = "com.gentleman-programming.engram-ui"
+const darwinPlistLabel = "com.notfoundsn.engram-ui"
 
 func (d *darwinAutostart) Install(execPath string) (Result, error) {
 	home, err := os.UserHomeDir()

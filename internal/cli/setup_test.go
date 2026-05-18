@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Gentleman-Programming/engram-ui/internal/installer"
+	"github.com/NotFoundSN/engram-ui/internal/installer"
 )
 
 // defaultTestSkills is the catalog stub used by setupSeam so tests don't hit
@@ -20,7 +20,7 @@ var defaultTestSkills = []installer.Skill{
 func setupSeam(outBuf, errBuf *bytes.Buffer,
 	claudeFn func(string) (string, error),
 	openFn func(string) (string, error),
-	autostartFn func() (string, error),
+	autostartFn func() (installer.Result, error),
 	fn func(),
 ) {
 	origOut, origErr := stdout, stderr
@@ -160,7 +160,10 @@ func TestCmdSetup_Autostart_NoToolFlag(t *testing.T) {
 	origAutostart := installAutostartFn
 	origClaude := installClaudeCodeFn
 	origOpen := installOpenCodeFn
-	installAutostartFn = func() (string, error) { autostartCalled = true; return "/fake/autostart", nil }
+	installAutostartFn = func() (installer.Result, error) {
+		autostartCalled = true
+		return installer.Result{Destination: "/fake/autostart", Action: installer.ActionInstalled}, nil
+	}
 	installClaudeCodeFn = func(n string) (string, error) { claudeCalled = true; return "", nil }
 	installOpenCodeFn = func(n string) (string, error) { openCalled = true; return "", nil }
 	origOut, origErr := stdout, stderr
@@ -202,7 +205,10 @@ func TestCmdSetup_Autostart_WithToolFlag_NoteAndProceed(t *testing.T) {
 
 	origAutostart := installAutostartFn
 	origOut, origErr := stdout, stderr
-	installAutostartFn = func() (string, error) { autostartCalled = true; return "/fake/autostart", nil }
+	installAutostartFn = func() (installer.Result, error) {
+		autostartCalled = true
+		return installer.Result{Destination: "/fake/autostart", Action: installer.ActionInstalled}, nil
+	}
 	stdout, stderr = &outBuf, &errBuf
 	defer func() {
 		installAutostartFn = origAutostart

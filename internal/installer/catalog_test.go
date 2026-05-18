@@ -1,9 +1,20 @@
 package installer
 
 import (
+	"io/fs"
+	"path"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
+
+// skillFrontmatterWithTriggers includes triggers for testing bilingual coverage.
+type skillFrontmatterWithTriggers struct {
+	Name        string   `yaml:"name"`
+	Description string   `yaml:"description"`
+	Triggers    []string `yaml:"triggers"`
+}
 
 func TestLoadCatalog_FindsBrainstorm(t *testing.T) {
 	catalog, err := LoadCatalog()
@@ -131,6 +142,165 @@ func TestLoadCatalog_AllThreeSkillsMigrated(t *testing.T) {
 	for name, present := range want {
 		if !present {
 			t.Errorf("LoadCatalog: expected skill %q not present in catalog", name)
+		}
+	}
+}
+
+// loadOpenCodeSkillFrontmatter reads and parses the OpenCode variant SKILL.md
+// frontmatter including triggers for testing.
+func loadOpenCodeSkillFrontmatter(skillName string) (*skillFrontmatterWithTriggers, error) {
+	skillPath := path.Join(skillsEmbedRoot, skillName, "opencode", "SKILL.md")
+	data, err := skillFS.ReadFile(skillPath)
+	if err != nil {
+		return nil, err
+	}
+
+	body := string(data)
+	if !strings.HasPrefix(body, "---") {
+		return &skillFrontmatterWithTriggers{}, nil
+	}
+
+	rest := body[3:]
+	if strings.HasPrefix(rest, "\r\n") {
+		rest = rest[2:]
+	} else if strings.HasPrefix(rest, "\n") {
+		rest = rest[1:]
+	}
+
+	endIdx := strings.Index(rest, "\n---")
+	if endIdx < 0 {
+		return nil, fs.ErrInvalid
+	}
+	yamlBlock := rest[:endIdx]
+
+	var fm skillFrontmatterWithTriggers
+	if err := yaml.Unmarshal([]byte(yamlBlock), &fm); err != nil {
+		return nil, err
+	}
+	return &fm, nil
+}
+
+func TestEngramConventionsOpenCode_SpanishTriggersPresent(t *testing.T) {
+	fm, err := loadOpenCodeSkillFrontmatter("engram-conventions")
+	if err != nil {
+		t.Fatalf("loadOpenCodeSkillFrontmatter(): %v", err)
+	}
+
+	requiredSpanish := []string{
+		"guardar en engram",
+		"guardar en memoria",
+		"buscar en engram",
+		"buscar memoria",
+		"resumen de sesion",
+		"cerrar sesion",
+		"clave de tema",
+		"tipos de observacion",
+		"que tipo usar",
+	}
+
+	triggerSet := make(map[string]bool)
+	for _, tr := range fm.Triggers {
+		triggerSet[tr] = true
+	}
+
+	for _, req := range requiredSpanish {
+		if !triggerSet[req] {
+			t.Errorf("Missing required Spanish trigger: %q", req)
+		}
+	}
+}
+
+func TestEngramConventionsOpenCode_EnglishTriggersPreserved(t *testing.T) {
+	fm, err := loadOpenCodeSkillFrontmatter("engram-conventions")
+	if err != nil {
+		t.Fatalf("loadOpenCodeSkillFrontmatter(): %v", err)
+	}
+
+	requiredEnglish := []string{
+		"mem_save",
+		"mem_search",
+		"mem_context",
+		"mem_session_summary",
+		"mem_judge",
+		"mem_update",
+		"save to engram",
+		"engram memory",
+		"observation save",
+		"topic_key",
+	}
+
+	triggerSet := make(map[string]bool)
+	for _, tr := range fm.Triggers {
+		triggerSet[tr] = true
+	}
+
+	for _, req := range requiredEnglish {
+		if !triggerSet[req] {
+			t.Errorf("Missing required English trigger: %q", req)
+		}
+	}
+}
+
+func TestEngramConventionsOpenCode_NoBareVerbTriggers(t *testing.T) {
+	fm, err := loadOpenCodeSkillFrontmatter("engram-conventions")
+	if err != nil {
+		t.Fatalf("loadOpenCodeSkillFrontmatter(): %v", err)
+	}
+
+	bareVerbs := []string{"guardar", "buscar", "save", "search"}
+	bareSet := make(map[string]bool)
+	for _, v := range bareVerbs {
+		bareSet[v] = true
+	}
+
+	for _, tr := range fm.Triggers {
+		if bareSet[tr] {
+			t.Errorf("Bare verb trigger found (should be memory-domain bound): %q", tr)
+		}
+	}
+}
+
+func TestEngramConventionsOpenCode_TriggerQualityRules(t *testing.T) {
+	fm, err := loadOpenCodeSkillFrontmatter("engram-conventions")
+	if err != nil {
+		t.Fatalf("loadOpenCodeSkillFrontmatter(): %v", err)
+	}
+
+	memoryDomainWords := []string{"engram", "memoria", "sesion", "tema", "observacion", "tipo", "memory", "observation"}
+	memorySet := make(map[string]bool)
+	for _, w := range memoryDomainWords {
+		memorySet[w] = true
+	}
+
+	// Technical identifiers (mem_*, topic_key) are exceptions to word count rules
+	isTechnicalID := func(tr string) bool {
+		return strings.HasPrefix(tr, "mem_") || tr == "topic_key"
+	}
+
+	for _, tr := range fm.Triggers {
+		// Skip quality rules for technical identifiers (they are single-word by design)
+		if isTechnicalID(tr) {
+			continue
+		}
+
+		// Length check: 2-4 words for natural language triggers
+		words := strings.Fields(tr)
+		if len(words) < 2 || len(words) > 4 {
+			t.Errorf("Trigger %q has %d words; expected 2-4 words", tr, len(words))
+		}
+
+		// Memory-domain bound check
+		hasMemoryWord := false
+		for _, w := range words {
+			// Normalize for comparison (lowercase, strip punctuation)
+			clean := strings.ToLower(strings.TrimSuffix(w, "_"))
+			if memorySet[clean] {
+				hasMemoryWord = true
+				break
+			}
+		}
+		if !hasMemoryWord {
+			t.Errorf("Trigger %q is not memory-domain bound", tr)
 		}
 	}
 }

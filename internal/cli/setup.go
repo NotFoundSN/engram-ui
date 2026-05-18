@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/Gentleman-Programming/engram-ui/internal/installer"
+	"github.com/NotFoundSN/engram-ui/internal/installer"
 )
 
 // autostartName is the reserved skill name that routes to the OS autostart
@@ -23,9 +23,8 @@ var installOpenCodeFn = func(name string) (string, error) {
 	return r.Destination, err
 }
 
-var installAutostartFn = func() (string, error) {
-	r, err := installer.InstallAutostart()
-	return r.Destination, err
+var installAutostartFn = func() (installer.Result, error) {
+	return installer.InstallAutostart()
 }
 
 var removeAutostartFn = func() (string, error) {
@@ -109,12 +108,31 @@ func cmdSetup(args []string) int {
 		if toolExplicit {
 			fmt.Fprintf(stderr, "note: --tool flag is ignored for autostart\n")
 		}
-		dest, err := installAutostartFn()
+		result, err := installAutostartFn()
 		if err != nil {
+			// Handle downgrade block with special messaging
+			if result.Action == installer.ActionBlockedDowngrade {
+				fmt.Fprintf(stderr, "engram-ui setup autostart: downgrade blocked\n")
+				fmt.Fprintf(stderr, "  installed: %s\n", result.InstalledVersion)
+				fmt.Fprintf(stderr, "  source:    %s\n", result.SourceVersion)
+				fmt.Fprintf(stderr, "Run setup from the newer version to upgrade.\n")
+				return 1
+			}
 			fmt.Fprintf(stderr, "engram-ui setup autostart: %v\n", err)
 			return 1
 		}
-		fmt.Fprintf(stderr, "registered: %s\n", dest)
+
+		// Handle success cases
+		switch result.Action {
+		case installer.ActionSkipped:
+			if result.Notes != "" {
+				fmt.Fprintf(stderr, "autostart %s: %s\n", result.Action, result.Notes)
+			} else {
+				fmt.Fprintf(stderr, "autostart %s\n", result.Action)
+			}
+		default:
+			fmt.Fprintf(stderr, "registered: %s\n", result.Destination)
+		}
 		return 0
 	}
 

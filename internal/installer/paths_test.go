@@ -127,7 +127,7 @@ func TestMacOSLaunchAgentPath(t *testing.T) {
 		{
 			name:    "standard macOS home",
 			homeDir: "/Users/user",
-			want:    filepath.Join("/Users/user", "Library", "LaunchAgents", "com.gentleman-programming.engram-ui.plist"),
+			want:    filepath.Join("/Users/user", "Library", "LaunchAgents", "com.notfoundsn.engram-ui.plist"),
 		},
 	}
 
@@ -173,6 +173,169 @@ func TestLinuxSystemdUnitPath(t *testing.T) {
 			got := LinuxSystemdUnitPath(tc.homeDir, tc.xdgConfigHome)
 			if got != tc.want {
 				t.Errorf("LinuxSystemdUnitPath(%q, %q) = %q, want %q", tc.homeDir, tc.xdgConfigHome, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestStableBinaryPath(t *testing.T) {
+	cases := []struct {
+		name         string
+		homeDir      string
+		localAppData string
+		goos         string
+		want         string
+	}{
+		{
+			name:         "Windows with LOCALAPPDATA",
+			homeDir:      `C:\Users\user`,
+			localAppData: `C:\Users\user\AppData\Local`,
+			goos:         "windows",
+			want:         filepath.Join(`C:\Users\user\AppData\Local`, "engram-ui", "engram-ui.exe"),
+		},
+		{
+			name:         "macOS",
+			homeDir:      "/Users/user",
+			localAppData: "",
+			goos:         "darwin",
+			want:         filepath.Join("/Users/user", "Library", "Application Support", "engram-ui", "engram-ui"),
+		},
+		{
+			name:         "Linux",
+			homeDir:      "/home/user",
+			localAppData: "",
+			goos:         "linux",
+			want:         filepath.Join("/home/user", ".local", "bin", "engram-ui"),
+		},
+		{
+			name:         "unsupported platform",
+			homeDir:      "/home/user",
+			localAppData: "",
+			goos:         "plan9",
+			want:         "",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := StableBinaryPath(tc.homeDir, tc.localAppData, tc.goos)
+			if got != tc.want {
+				t.Errorf("StableBinaryPath(%q, %q, %q) = %q, want %q", tc.homeDir, tc.localAppData, tc.goos, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsStableBinaryPath(t *testing.T) {
+	cases := []struct {
+		name         string
+		path         string
+		homeDir      string
+		localAppData string
+		goos         string
+		want         bool
+	}{
+		{
+			name:         "Windows stable path",
+			path:         `C:\Users\user\AppData\Local\engram-ui\engram-ui.exe`,
+			homeDir:      `C:\Users\user`,
+			localAppData: `C:\Users\user\AppData\Local`,
+			goos:         "windows",
+			want:         true,
+		},
+		{
+			name:         "Windows transient path",
+			path:         `C:\Users\user\Downloads\engram-ui.exe`,
+			homeDir:      `C:\Users\user`,
+			localAppData: `C:\Users\user\AppData\Local`,
+			goos:         "windows",
+			want:         false,
+		},
+		{
+			name:         "macOS stable path",
+			path:         "/Users/user/Library/Application Support/engram-ui/engram-ui",
+			homeDir:      "/Users/user",
+			localAppData: "",
+			goos:         "darwin",
+			want:         true,
+		},
+		{
+			name:         "macOS homebrew path",
+			path:         "/opt/homebrew/bin/engram-ui",
+			homeDir:      "/Users/user",
+			localAppData: "",
+			goos:         "darwin",
+			want:         true,
+		},
+		{
+			name:         "Linux stable path",
+			path:         "/home/user/.local/bin/engram-ui",
+			homeDir:      "/home/user",
+			localAppData: "",
+			goos:         "linux",
+			want:         true,
+		},
+		{
+			name:         "Linux system path",
+			path:         "/usr/local/bin/engram-ui",
+			homeDir:      "/home/user",
+			localAppData: "",
+			goos:         "linux",
+			want:         true,
+		},
+		{
+			name:         "Linux transient path",
+			path:         "/home/user/Downloads/engram-ui",
+			homeDir:      "/home/user",
+			localAppData: "",
+			goos:         "linux",
+			want:         false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := IsStableBinaryPath(tc.path, tc.homeDir, tc.localAppData, tc.goos)
+			if got != tc.want {
+				t.Errorf("IsStableBinaryPath(%q, %q, %q, %q) = %v, want %v", tc.path, tc.homeDir, tc.localAppData, tc.goos, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestStableBinaryPrefixes(t *testing.T) {
+	cases := []struct {
+		name string
+		goos string
+		want int // number of expected prefixes
+	}{
+		{
+			name: "Windows prefixes",
+			goos: "windows",
+			want: 3, // LOCALAPPDATA, ProgramFiles, C:\Program Files
+		},
+		{
+			name: "macOS prefixes",
+			goos: "darwin",
+			want: 3, // homebrew, usr/local/bin, ~/.local/bin
+		},
+		{
+			name: "Linux prefixes",
+			goos: "linux",
+			want: 3, // /usr/local/bin, /opt/homebrew/bin, ~/.local/bin
+		},
+		{
+			name: "unsupported platform",
+			goos: "plan9",
+			want: 0,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := StableBinaryPrefixes(tc.goos)
+			if len(got) != tc.want {
+				t.Errorf("StableBinaryPrefixes(%q) returned %d prefixes, want %d", tc.goos, len(got), tc.want)
 			}
 		})
 	}

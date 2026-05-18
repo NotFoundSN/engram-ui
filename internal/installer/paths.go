@@ -1,7 +1,79 @@
 // Package installer path helpers — pure, no build tags, testable on all OSes.
 package installer
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"strings"
+)
+
+// StableBinaryPath returns the stable binary path for the given OS.
+// Returns empty string for unsupported platforms.
+func StableBinaryPath(homeDir, localAppData, goos string) string {
+	switch goos {
+	case "windows":
+		return filepath.Join(localAppData, "engram-ui", "engram-ui.exe")
+	case "darwin":
+		return filepath.Join(homeDir, "Library", "Application Support", "engram-ui", "engram-ui")
+	case "linux":
+		return filepath.Join(homeDir, ".local", "bin", "engram-ui")
+	default:
+		return ""
+	}
+}
+
+// IsStableBinaryPath returns true if the given path is already a stable path.
+// It checks against known stable path prefixes for each OS.
+func IsStableBinaryPath(path, homeDir, localAppData, goos string) bool {
+	if path == "" {
+		return false
+	}
+
+	// Normalize path separators for comparison
+	path = filepath.ToSlash(path)
+
+	// Get the expected stable path for comparison
+	expectedStable := filepath.ToSlash(StableBinaryPath(homeDir, localAppData, goos))
+	if expectedStable != "" && path == expectedStable {
+		return true
+	}
+
+	// Check against stable prefixes
+	prefixes := StableBinaryPrefixes(goos)
+	for _, prefix := range prefixes {
+		prefix = filepath.ToSlash(prefix)
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// StableBinaryPrefixes returns the known stable path prefixes for the given OS.
+func StableBinaryPrefixes(goos string) []string {
+	switch goos {
+	case "windows":
+		return []string{
+			"%LOCALAPPDATA%\\engram-ui",
+			"%ProgramFiles%",
+			`C:\Program Files\`,
+		}
+	case "darwin":
+		return []string{
+			"/opt/homebrew/bin/",
+			"/usr/local/bin/",
+			"/.local/bin/",
+		}
+	case "linux":
+		return []string{
+			"/usr/local/bin/",
+			"/opt/homebrew/bin/",
+			"/.local/bin/",
+		}
+	default:
+		return nil
+	}
+}
 
 // ClaudeSkillDir returns the destination root for the named skill under
 // Claude Code: {home}/.claude/skills/{name}
@@ -29,9 +101,9 @@ func WindowsStartupDir(appData string) string {
 }
 
 // MacOSLaunchAgentPath returns the plist destination path:
-// {home}/Library/LaunchAgents/com.gentleman-programming.engram-ui.plist
+// {home}/Library/LaunchAgents/com.notfoundsn.engram-ui.plist
 func MacOSLaunchAgentPath(homeDir string) string {
-	return filepath.Join(homeDir, "Library", "LaunchAgents", "com.gentleman-programming.engram-ui.plist")
+	return filepath.Join(homeDir, "Library", "LaunchAgents", "com.notfoundsn.engram-ui.plist")
 }
 
 // LinuxSystemdUnitPath returns: {base}/systemd/user/engram-ui.service

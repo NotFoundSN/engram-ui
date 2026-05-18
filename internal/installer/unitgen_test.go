@@ -59,10 +59,10 @@ func TestBuildLaunchAgentPlist(t *testing.T) {
 		{
 			name:     "basic",
 			execPath: "/usr/local/bin/engram-ui",
-			label:    "com.gentleman-programming.engram-ui",
+			label:    "com.notfoundsn.engram-ui",
 			wantIn: []string{
 				"<key>Label</key>",
-				"<string>com.gentleman-programming.engram-ui</string>",
+				"<string>com.notfoundsn.engram-ui</string>",
 				"<key>ProgramArguments</key>",
 				"<string>/usr/local/bin/engram-ui</string>",
 				"<string>serve</string>",
@@ -86,7 +86,7 @@ func TestBuildLaunchAgentPlist(t *testing.T) {
 		{
 			name:     "exec path with spaces",
 			execPath: "/home/user/my apps/engram-ui",
-			label:    "com.gentleman-programming.engram-ui",
+			label:    "com.notfoundsn.engram-ui",
 			wantIn: []string{
 				"<string>/home/user/my apps/engram-ui</string>",
 				"<true/>",
